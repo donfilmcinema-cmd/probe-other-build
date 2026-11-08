@@ -1,0 +1,240 @@
+{
+ "version": 1,
+ "language": "en",
+ "detail": "notes",
+ "f0": "rmvpe",
+ "notes": [
+  {
+   "t": 0.0,
+   "dur": 0.601,
+   "pitch": 64,
+   "cents": 0,
+   "vel": 99,
+   "syl": "I",
+   "word": 0,
+   "spoken": false
+  },
+  {
+   "t": 0.601,
+   "dur": 0.679,
+   "pitch": 67,
+   "cents": -1,
+   "vel": 99,
+   "syl": "wish",
+   "word": 1,
+   "spoken": false
+  },
+  {
+   "t": 1.28,
+   "dur": 0.35,
+   "pitch": 69,
+   "cents": 1,
+   "vel": 100,
+   "syl": "you",
+   "word": 2,
+   "spoken": false
+  },
+  {
+   "t": 1.63,
+   "dur": 0.32,
+   "pitch": 67,
+   "cents": -1,
+   "vel": 100,
+   "syl": "were",
+   "word": 3,
+   "spoken": false
+  },
+  {
+   "t": 1.95,
+   "dur": 0.64,
+   "pitch": 69,
+   "cents": 6,
+   "vel": 99,
+   "syl": "here",
+   "word": 4,
+   "spoken": false
+  },
+  {
+   "t": 2.59,
+   "dur": 0.66,
+   "pitch": 71,
+   "cents": 3,
+   "vel": 103,
+   "syl": "-",
+   "word": 4,
+   "spoken": false
+  },
+  {
+   "t": 3.25,
+   "dur": 0.34,
+   "pitch": 72,
+   "cents": -5,
+   "vel": 94,
+   "syl": "to-",
+   "word": 5,
+   "spoken": false
+  },
+  {
+   "t": 3.59,
+   "dur": 1.29,
+   "pitch": 71,
+   "cents": -2,
+   "vel": 100,
+   "syl": "night",
+   "word": 5,
+   "spoken": false
+  },
+  {
+   "t": 6.386,
+   "dur": 0.284,
+   "pitch": 62,
+   "cents": 0,
+   "vel": 96,
+   "syl": "we",
+   "word": 6,
+   "spoken": false
+  },
+  {
+   "t": 6.67,
+   "dur": 0.3,
+   "pitch": 64,
+   "cents": -1,
+   "vel": 105,
+   "syl": "are",
+   "word": 7,
+   "spoken": false
+  },
+  {
+   "t": 6.97,
+   "dur": 0.557,
+   "pitch": 65,
+   "cents": 2,
+   "vel": 101,
+   "syl": "the",
+   "word": 8,
+   "spoken": false
+  },
+  {
+   "t": 7.527,
+   "dur": 0.641,
+   "pitch": 67,
+   "cents": 5,
+   "vel": 97,
+   "syl": "beau-",
+   "word": 9,
+   "spoken": false
+  },
+  {
+   "t": 8.168,
+   "dur": 0.312,
+   "pitch": 69,
+   "cents": -7,
+   "vel": 99,
+   "syl": "ti-",
+   "word": 9,
+   "spoken": false
+  },
+  {
+   "t": 8.48,
+   "dur": 0.62,
+   "pitch": 67,
+   "cents": -3,
+   "vel": 98,
+   "syl": "ful",
+   "word": 9,
+   "spoken": false
+  },
+  {
+   "t": 9.389,
+   "dur": 0.601,
+   "pitch": 64,
+   "cents": -2,
+   "vel": 97,
+   "syl": "no",
+   "word": 10,
+   "spoken": false
+  },
+  {
+   "t": 9.99,
+   "dur": 1.2,
+   "pitch": 62,
+   "cents": 9,
+   "vel": 88,
+   "syl": "-",
+   "word": 10,
+   "spoken": false
+  }
+ ],
+ "words": [
+  {
+   "text": "I",
+   "t": 0.2,
+   "dur": 0.02,
+   "line": 0
+  },
+  {
+   "text": "wish",
+   "t": 0.601,
+   "dur": 0.661,
+   "line": 0
+  },
+  {
+   "text": "you",
+   "t": 1.281,
+   "dur": 0.28,
+   "line": 0
+  },
+  {
+   "text": "were",
+   "t": 1.642,
+   "dur": 0.42,
+   "line": 0
+  },
+  {
+   "text": "here",
+   "t": 2.582,
+   "dur": 0.781,
+   "line": 0
+  },
+  {
+   "text": "tonight",
+   "t": 3.563,
+   "dur": 1.441,
+   "line": 0
+  },
+  {
+   "text": "we",
+   "t": 6.386,
+   "dur": 0.14,
+   "line": 1
+  },
+  {
+   "text": "are",
+   "t": 6.766,
+   "dur": 0.34,
+   "line": 1
+  },
+  {
+   "text": "the",
+   "t": 7.267,
+   "dur": 0.08,
+   "line": 1
+  },
+  {
+   "text": "beautiful",
+   "t": 7.527,
+   "dur": 1.361,
+   "line": 1
+  },
+  {
+   "text": "no",
+   "t": 9.389,
+   "dur": 0.16,
+   "line": 1
+  }
+ ],
+ "tempo_hint": 101.6,
+ "seconds": 11.59,
+ "missing_words": [],
+ "t_total": 24.4
+}
