@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset=".55" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity=".1"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="38" height="38" rx="9" fill="#2a1d14"/>
+  <rect x="1" y="1" width="38" height="38" rx="9" fill="url(#g)" stroke="#fff" stroke-opacity=".14"/>
+  <!-- круговая стрелка «перепеть» вокруг микрофона -->
+  <path d="M30.5 13.5A12 12 0 1 0 32 20" fill="none" stroke="#e3b464" stroke-width="2" stroke-linecap="round"/>
+  <path d="M27.2 10.6l3.6 2.9-0.6 4.4" fill="none" stroke="#e3b464" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="16.5" y="10.5" width="7" height="12" rx="3.5" fill="none" stroke="#ff8f3f" stroke-width="2.2"/>
+  <path d="M13.5 19a6.5 6.5 0 0 0 13 0M20 25.5v3.5" fill="none" stroke="#ff8f3f" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

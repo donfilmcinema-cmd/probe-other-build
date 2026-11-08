@@ -1,0 +1,175 @@
+name: Build DZOD Vocalist + DZOD Revoicer
+
+# Только ручной запуск: Windows-сборка всегда, долгая сквозная проверка (~2,5 ч) — по флажку.
+on:
+  workflow_dispatch:
+    inputs:
+      engine_test:
+        description: "Сквозная проверка движка (~2,5 ч)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows x64 (приложение + установщик)
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Зависимости
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Самопроверка (исходники)
+        run: python app/selftest.py
+
+      - name: Самопроверка (исходники, DZOD Revoicer)
+        env:
+          DZOD_FLAVOR: revoicer
+        run: python app/selftest.py
+
+      - name: Версия
+        id: ver
+        shell: pwsh
+        run: |
+          $v = python tools/version_info.py
+          python tools/version_info.py "DZOD Revoicer" | Out-Null
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Сборка приложения
+        run: >
+          pyinstaller --noconfirm --clean --windowed --name "DZOD Vocalist"
+          --icon assets/icon.ico --version-file version_info.txt
+          --paths app --add-data "app/ui;ui" --add-data "app/workers;workers"
+          --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import psutil
+          --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL
+          --exclude-module IPython --exclude-module pytest
+          app/main.py
+
+      - name: Сборка DZOD Revoicer (те же исходники, flavor.txt = revoicer)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force flavor_build | Out-Null
+          Set-Content -Path flavor_build/flavor.txt -Value "revoicer" -NoNewline -Encoding ascii
+          pyinstaller --noconfirm --clean --windowed --name "DZOD Revoicer" `
+            --icon assets/icon.ico --version-file version_info_rv.txt `
+            --paths app --add-data "app/ui;ui" --add-data "app/workers;workers" --add-data "flavor_build/flavor.txt;." `
+            --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import psutil `
+            --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL `
+            --exclude-module IPython --exclude-module pytest `
+            app/main.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller: код $LASTEXITCODE" }
+
+      - name: Самопроверка собранного приложения
+        shell: pwsh
+        run: |
+          foreach ($n in "DZOD Vocalist", "DZOD Revoicer") {
+            $log = Join-Path $env:RUNNER_TEMP "selftest-$n.log"
+            $p = Start-Process -FilePath "dist/$n/$n.exe" -ArgumentList "--selftest", "`"$log`"" -Wait -PassThru
+            if (Test-Path $log) { Get-Content $log -Encoding utf8 }
+            if ($p.ExitCode -ne 0) { throw "$n — самопроверка не пройдена: код $($p.ExitCode)" }
+          }
+
+      - name: Проверка окна (WebView2)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          foreach ($n in "DZOD Vocalist", "DZOD Revoicer") {
+            $log = Join-Path $env:RUNNER_TEMP "ui-$n.log"
+            $p = Start-Process -FilePath "dist/$n/$n.exe" -ArgumentList "--smoke-ui", "`"$log`"" -PassThru
+            if (-not $p.WaitForExit(150000)) { $p.Kill(); Write-Host "$n — окно не закрылось за 150 с" }
+            if (Test-Path $log) { Get-Content $log -Encoding utf8 }
+            $appLog = Join-Path $env:LOCALAPPDATA "$n/log.txt"
+            if (Test-Path $appLog) { Get-Content $appLog -Encoding utf8 -Tail 40 }
+            if ($p.ExitCode -ne 0) { throw "$n — окно не открылось: код $($p.ExitCode)" }
+          }
+
+      - name: Установщик и архив
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item INSTALL.txt "dist/DZOD Vocalist/КАК УСТАНОВИТЬ.txt"
+          Copy-Item INSTALL_REVOICER.txt "dist/DZOD Revoicer/КАК УСТАНОВИТЬ.txt"
+          Compress-Archive -Path "dist/DZOD Vocalist" -DestinationPath "out/DZOD-Vocalist-$v-win64.zip"
+          Compress-Archive -Path "dist/DZOD Revoicer" -DestinationPath "out/DZOD-Revoicer-$v-win64.zip"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVer=$v" tools/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup (Vocalist): код $LASTEXITCODE" }
+          & $iscc "/DAppVer=$v" "/DRevoicer" tools/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup (Revoicer): код $LASTEXITCODE" }
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Артефакт
+        # необязательный: у аккаунта общий лимит места под артефакты, выпуск идёт через релиз
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: DZOD-Vocalist-Windows
+          path: out
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Релиз
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $tag = "v$v"
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            # выпущенную версию не перезаписываем: новая сборка — новая версия
+            Write-Error "Релиз $tag уже есть — поднимите VERSION в app/engine.py."
+            exit 1
+          } else {
+            gh release create $tag (Get-ChildItem out).FullName --title "DZOD Vocalist $v + DZOD Revoicer $v" --notes "Сборка для Windows 10/11 (64 бит). DZOD Vocalist — полная программа (обучение вокалиста): DZOD-Vocalist-$v-setup.exe. DZOD Revoicer — перепевка для DZOD Studio (вокалист загружается папкой): DZOD-Revoicer-$v-setup.exe. Без установки: архивы win64.zip. Движок каждая программа ставит сама при первом запуске."
+          }
+
+  engine:
+    name: Сквозная проверка движка (Windows, процессор)
+    if: ${{ inputs.engine_test }}
+    runs-on: windows-latest
+    timeout-minutes: 210
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      DZOD_ROOT: C:\dzv
+      DZOD_CPU_TORCH: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Зависимости программы
+        run: python -m pip install -r requirements.txt
+
+      - name: Тестовая песня (Karissa Hobbs, CC BY, из librosa/data)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/librosa/data/main/audio/Karissa_Hobbs_-_Lets_Go_Fishin.ogg" -OutFile song.ogg
+          python -c "import soundfile as sf, numpy as np; from scipy.signal import resample_poly; x,sr=sf.read('song.ogg'); x=x[int(30*sr):int(42*sr)]; y=resample_poly(x,2,1).astype('float32'); sf.write('song12.wav', np.stack([y,y],1), 44100, subtype='PCM_24')"
+
+      - name: Установка движка и сквозная проверка
+        run: python app/engine_test.py song12.wav
+
+      - name: Журнал программы
+        if: always()
+        shell: pwsh
+        run: |
+          $appLog = Join-Path $env:LOCALAPPDATA "DZOD Vocalist/log.txt"
+          if (Test-Path $appLog) { Get-Content $appLog -Encoding utf8 -Tail 300 }

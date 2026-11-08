@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DZOD Vocalist</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="dzod-fonts.css">
+<link rel="stylesheet" href="dzod-theme.css">
+<link rel="stylesheet" href="revoicer.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">
+    <img src="assets/dzod-mark.svg" alt="">
+    <span class="word">DZOD <b id="brand-name">Vocalist</b></span>
+  </div>
+  <nav id="tabs">
+    <button class="tab" data-tab="engine"><i class="tn">1</i><span>Движок</span><i id="eng-dot" class="dot"></i></button>
+    <span class="tab-arrow">›</span>
+    <button class="tab" data-tab="voice"><i class="tn">2</i><span>Голос</span></button>
+    <span class="tab-arrow" id="voice-arrow">›</span>
+    <button class="tab" data-tab="song"><i class="tn" id="song-tn">3</i><span id="song-tab-name">Песня</span></button>
+    <span class="tab-arrow rv-hide">·</span>
+    <button class="tab rv-hide" data-tab="exec" title="DZOD Executor: пение по MIDI-нотам с текстом голосом вокалиста (проба, этап E1)"><i class="tn">4</i><span>Executor <small class="dim">проба</small></span></button>
+  </nav>
+  <span class="ver mono" id="ver"></span>
+</header>
+
+<main id="main">
+
+<!-- ================= 4. EXECUTOR (проба E1) ================= -->
+<section id="t-exec" class="tabpane" hidden>
+  <div class="content single">
+    <div class="head">
+      <div>
+        <h2>DZOD Executor <small class="dim">проба</small></h2>
+        <p class="sub">Пение по MIDI-нотам с текстом (английский) голосом вашего вокалиста. Ноты и слоги — как в Omnivocal:
+          слог на ноту, «beau-» «ti-» «ful», «-» — тянуть, <span class="mono">[N OW1]</span> — фонемы, <span class="mono">sil</span> — пауза.</p>
+      </div>
+      <div class="state-pill" id="ex-pill"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="p-h"><span class="num">1</span><h3>Установка</h3></div>
+        <div class="steps" id="ex-steps"></div>
+        <div class="bar"><button class="btn primary" id="ex-install">Установить Executor</button></div>
+        <p class="note">SoulX-Singer (Apache 2.0) — модель английского пения, около 6 ГБ вместе с библиотеками. Ставится рядом с движком Vocalist, один раз.</p>
+      </div>
+      <div class="panel">
+        <div class="p-h"><span class="num">2</span><h3>Ноты с текстом</h3></div>
+        <div class="bar">
+          <button class="btn" id="ex-midi">Выбрать MIDI…</button>
+          <span class="mono small" id="ex-midi-name">файл не выбран</span>
+        </div>
+        <div class="bar"><button class="btn sm" id="ex-check" disabled>Проверить разметку</button>
+          <button class="btn sm" id="ex-guide" disabled title="Простой тон по нотам — проверить высоту и ритм без видеокарты">Guide Tone</button><span class="note" id="ex-check-sum"></span></div>
+        <div id="ex-meta" class="ex-meta"></div>
+        <p class="note">MIDI с текстом у нот (lyrics) — из Cubase, Samplitude или DZOD Studio. Одна Line, один голос.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-h"><span class="num">3</span><h3>Голос и пение</h3></div>
+      <div class="opt-row"><div class="opt-k">Голос Executor<small>образец + вокалист + параметры</small></div>
+        <div><select id="ex-preset"></select> <span class="note" id="ex-preset-note"></span></div></div>
+      <div class="opt-row"><div class="opt-k">Вокалист</div><div><select id="ex-voice"></select></div></div>
+
+      <div class="opt-row"><div class="opt-k">Сила тембра<small>index rate</small></div>
+        <div class="slider"><input type="range" id="ex-index" min="0" max="100" step="5" value="60"><span class="mono" id="ex-index-v">60 %</span></div></div>
+      <div class="opt-row"><div class="opt-k">Защита согласных<small>protect</small></div>
+        <div class="slider"><input type="range" id="ex-protect" min="0" max="50" step="1" value="33"><span class="mono" id="ex-protect-v">0,33</span></div></div>
+      <div class="bar"><button class="btn primary" id="ex-sing" disabled>Спеть</button><span class="note" id="ex-sing-note"></span></div>
+      <div class="bar"><input type="text" id="ex-preset-name" placeholder="Имя нового голоса Executor" maxlength="60">
+        <button class="btn sm" id="ex-preset-save" title="Запомнить образец, вокалиста и параметры под этим именем — навсегда, с копией образца">Сохранить как голос Executor</button></div>
+    </div>
+    <div class="panel">
+      <div class="p-h"><span class="num">⚙</span><h3>Параметры Executor</h3>
+        <span class="grow"></span><button class="btn sm" id="ex-reset" title="Все параметры — как у Omnivocal по умолчанию">По умолчанию</button></div>
+      <div class="ex-grid" id="ex-params"></div>
+      <p class="note">Как у Omnivocal. Dynamic — живая высота модели (вибрато и изгибы — её); Straight — ровно по нотам, вибрато — ручками ниже, pitch bend из MIDI.
+        Изменение Transpose, Style, вибрато или нот пересчитывает только изменённые фразы, остальное — из кэша.</p>
+    </div>
+    <div class="panel">
+      <div class="p-h"><span class="num">♪</span><h3>MIDI из вокала <small class="dim">проба</small></h3></div>
+      <p class="note">WAV сухого вокала + текст песни → MIDI: ноты по голосу, под каждой нотой — слог (распев — «-»). Английский и русский.
+        Можно сразу петь этот MIDI в Executor или открыть в DAW.</p>
+      <div class="bar"><button class="btn" id="tr-wav">Выбрать вокал…</button><span class="mono small" id="tr-wav-name">файл не выбран</span>
+        <select id="tr-lang"><option value="auto">язык — по тексту</option><option value="en">English</option><option value="ru">Русский</option></select>
+        <select id="tr-detail"><option value="notes">по нотам</option><option value="detailed">подробно (мелизмы)</option></select></div>
+      <textarea id="tr-lyrics" rows="5" placeholder="Текст песни — как поётся, строками"></textarea>
+      <div class="bar"><button class="btn primary" id="tr-go" disabled>Распознать MIDI</button><span class="note" id="tr-note"></span>
+        <span class="grow"></span><button class="btn sm" id="tr-show" hidden>Показать MIDI</button><button class="btn sm" id="tr-use" hidden>Петь этот MIDI</button></div>
+    </div>
+    <div class="panel">
+      <div class="p-h"><span class="num">4</span><h3>Результаты</h3><span class="dim small" id="ex-measure"></span></div>
+      <div id="ex-results"></div>
+      <p class="note">Файлы — WAV 48 кГц от начала MIDI: ставьте с нуля Space. Рядом — сырое пение SoulX (до голоса вокалиста) и замер скорости (…замер NN.json) — пришлите его в чат Vocalist.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 1. ДВИЖОК ================= -->
+<section id="t-engine" class="tabpane" hidden>
+  <div class="content single">
+    <div class="head">
+      <div>
+        <h2>Движок</h2>
+        <p class="sub">Нейросети, которые чистят вокал, учат голос и перепевают партии. Ставятся один раз.</p>
+      </div>
+      <div class="state-pill" id="eng-pill"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <div class="p-h"><h3>Установка</h3><span class="dim small" id="eng-free"></span></div>
+        <div class="steps" id="eng-steps"></div>
+        <div class="bar">
+          <button class="btn primary" id="eng-install">Установить движок</button>
+          <button class="btn sm ghost" id="eng-reinstall" hidden title="Скачать библиотеки заново. Голоса, песни и модели не удаляются">Переустановить</button>
+        </div>
+        <p class="note">Около 12 ГБ, 20–60 минут. Можно прервать и продолжить — скачанное не пропадёт.</p>
+      </div>
+
+      <div class="panel">
+        <div class="p-h"><h3>Видеокарта</h3></div>
+        <div class="gpu" id="eng-gpu"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="p-h"><h3>Нейросети чистки</h3><span class="dim small" id="sep-sum"></span>
+        <button class="btn sm primary" id="sep-dl">Скачать все</button></div>
+      <p class="note top">Для каждого варианта чистки — своя нейросеть. Она скачивается один раз, при первом
+        использовании этого варианта (0,2–0,9 ГБ). Чтобы не ждать во время работы — скачайте все сразу.</p>
+      <div class="mtable" id="sep-list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="p-h"><h3>Папка программы</h3></div>
+      <div class="row">
+        <input type="text" id="root" class="mono grow" spellcheck="false">
+        <button class="btn" id="root-pick">Выбрать…</button>
+        <button class="btn" id="root-set">Применить</button>
+      </div>
+      <p class="note" id="root-note"></p>
+      <div class="folders" id="folders"></div>
+    </div>
+
+    <div class="panel">
+      <div class="p-h"><h3>Журнал</h3><span class="dim small">ход работы и ошибки</span>
+        <span class="grow"></span>
+        <button class="btn sm" id="log-refresh">Обновить</button>
+        <button class="btn sm" id="eng-log">Открыть файл</button></div>
+      <pre class="logbox mono" id="logbox"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. ГОЛОС ================= -->
+<section id="t-voice" class="tabpane" hidden>
+  <aside class="side">
+    <div class="side-h"><span class="cap">Голоса</span></div>
+    <button class="btn primary wide" id="voice-new">+ Новый голос</button>
+    <button class="btn wide" id="voice-import" title="Уже есть обученная модель RVC: файл .pth (и, если есть, .index)">Добавить готовую модель…</button>
+    <div class="list" id="voice-list"></div>
+    <p class="side-note">Голос — это модель, обученная на фразах одного певца. Её выбирают на шаге «Песня».</p>
+  </aside>
+  <div class="content">
+    <div class="empty" id="voice-empty">
+      <h1>Свой вокалист</h1>
+      <p class="lead">Голос DZOD учится на лучших партиях. Три шага:</p>
+      <div class="steps3">
+        <div><b>1. Датасет</b><span>Загрузите фразы и оставьте только безупречные — 30–60 минут одного тембра.</span></div>
+        <div><b>2. Обучение</b><span>Одна кнопка. На RTX 3080 Ti — несколько часов.</span></div>
+        <div><b>3. Эпохи</b><span>Один отрывок перепевается разными эпохами — выбираете лучшую на слух.</span></div>
+      </div>
+      <button class="btn primary" id="voice-new2">Создать голос</button>
+    </div>
+
+    <div id="voice-view" hidden>
+      <div class="head">
+        <div>
+          <h2 id="voice-name"></h2>
+          <p class="sub" id="voice-sub"></p>
+        </div>
+        <div class="head-btns">
+          <button class="btn sm" id="voice-rename">Переименовать</button>
+          <button class="btn sm" id="voice-folder" title="Папка голоса: фразы, датасет, основная модель">Открыть папку голоса</button>
+          <button class="btn sm" id="voice-export" title="Папка с моделью, индексом и паспортом голоса — её загружают в DZOD Revoicer (DZOD Studio)">Сохранить вокалиста в папку…</button>
+          <button class="btn sm ghost" id="voice-del">Удалить голос…</button>
+        </div>
+      </div>
+      <div class="now" id="v-now"><span class="now-k">Что делать сейчас</span><span id="v-now-t"></span><button class="btn sm" id="v-now-go" hidden></button></div>
+      <nav class="stepper" id="vtabs">
+        <button data-v="ds" class="on"><i>1</i><b>Датасет</b><span id="vs-ds">фразы для обучения</span></button>
+        <button data-v="tr"><i>2</i><b>Обучение</b><span id="vs-tr">модель учится на фразах</span></button>
+        <button data-v="ep"><i>3</i><b>Эпохи</b><span id="vs-ep">выбор лучшей на слух</span></button>
+      </nav>
+
+      <!-- Датасет -->
+      <div id="v-ds">
+        <div class="panel">
+          <div class="p-h"><h3>Добавить материал</h3></div>
+          <div class="cards two">
+            <div class="card static">
+              <b>Записи целиком</b>
+              <span>Вокальные партии или треки. Программа почистит их и сама нарежет на фразы по паузам.</span>
+              <div class="card-opts">
+                <label class="chk"><input type="checkbox" id="ds-clean" checked><span>Почистить перед нарезкой</span></label>
+                <label class="chk"><input type="checkbox" id="ds-backing" checked><span>Отделить бэк-вокал</span></label>
+                <label class="chk"><input type="checkbox" id="ds-denoise"><span>Убрать шум</span></label>
+                <label class="chk"><input type="checkbox" id="ds-mix"><span>Это полные треки (с музыкой)</span></label>
+              </div>
+              <div class="lbl">Реверберация</div>
+              <div class="seg" id="ds-dereverb">
+                <button data-v="off">С ревером</button>
+                <button data-v="uvr" class="on" title="UVR-DeEcho-DeReverb, VR, окно 512, сила 50 — как ваш пресет UVR">Без ревера — как в UVR</button>
+                <button data-v="roformer" title="Другая нейросеть: убирает сильнее, может съесть часть голоса">Roformer</button>
+              </div>
+              <button class="btn primary" id="ds-add">Выбрать записи…</button>
+            </div>
+            <div class="card static">
+              <b>Готовые фразы (папка)</b>
+              <span>Папка уже нарезанных фраз — например, набор КЛАВДИИ ГЛАВНОЙ (ветка vocal-train). Каждый файл —
+                одна фраза, повторно не режется. Архивы best/spare распаковываются сами, лучшие (★ в table.csv)
+                сразу отмечаются «Оставить».</span>
+              <span class="grow"></span>
+              <button class="btn primary" id="ds-folder">Выбрать папку…</button>
+            </div>
+          </div>
+          <div class="sources" id="ds-sources"></div>
+        </div>
+
+        <div class="panel">
+          <div class="p-h"><h3>Отбор фраз</h3><span class="dim small" id="ds-stats"></span></div>
+          <p class="note top">В обучение идут только фразы с отметкой <b class="ok-t">✓ Оставить</b>. Нужно 30–60 минут:
+            больше часа почти ничего не добавляет. Оставляйте только чистое — без ревера, «стекла», булькающих нот и
+            протёкшей музыки. Модель запомнит дефекты как часть голоса.</p>
+          <div class="meter"><div class="meter-fill" id="ds-meter"></div>
+            <span class="meter-mark" style="left:33.3%">30 мин</span><span class="meter-mark" style="left:66.6%">60 мин</span></div>
+          <div class="cover-h"><span class="lbl">Охват по нотам</span><span class="note">оранжевым — оставленное, серым — остальное.
+            Хорошо, когда оставлен весь диапазон, а не только середина.</span></div>
+          <div class="cover" id="ds-cover"></div>
+          <div class="ph-tools">
+            <div class="seg" id="ph-filter">
+              <button data-v="new" class="on">Не просмотренные</button>
+              <button data-v="keep">Оставленные</button>
+              <button data-v="drop">Выброшенные</button>
+              <button data-v="all">Все</button>
+            </div>
+            <div class="field inline"><span class="lbl">Порядок</span>
+            <select id="ph-sort">
+              <option value="order">как в записях</option>
+              <option value="f0">выше → ниже</option>
+              <option value="bright">ярче → глуше</option>
+              <option value="hf">больше «стекла» сверху</option>
+              <option value="rms">громче → тише</option>
+              <option value="dur">длиннее → короче</option>
+            </select></div>
+            <label class="chk"><input type="checkbox" id="ph-auto" checked><span>Слушать подряд</span></label>
+            <span class="grow"></span>
+            <button class="btn sm" id="ph-keepall" title="Отметить «Оставить» все фразы, которые сейчас видны в списке">Оставить все в списке</button>
+            <button class="btn sm" id="ph-dropclip" title="Отметить «Выбросить» все фразы с перегрузом (клиппингом)">Выбросить перегруженные</button>
+          </div>
+          <p class="keys"><b>Клавиши:</b> Пробел — слушать · ↓ ↑ — следующая / предыдущая ·
+            <b>Enter</b> или <b>1</b> — оставить · <b>Delete</b> или <b>2</b> — выбросить · <b>0</b> — снять отметку</p>
+          <div class="phrases" id="ph-list" tabindex="0"></div>
+          <p class="note">Колонки: <b>нота</b> — средняя высота фразы; <b>громк.</b> — громкость звучащих мест;
+            <b>верх</b> — доля звука выше 8 кГц (жёлтым больше 2,5 % — возможны «стекло» и шипение).</p>
+        </div>
+      </div>
+
+      <!-- Обучение -->
+      <div id="v-tr" hidden>
+        <div class="panel">
+          <div class="p-h"><h3>Обучение модели</h3></div>
+          <div id="tr-ds" class="tr-ds"></div>
+          <div class="fields4">
+            <div class="field"><span class="lbl">Частота</span>
+              <select id="tr-sr">
+                <option value="48000">48 кГц</option>
+                <option value="40000">40 кГц</option>
+                <option value="32000">32 кГц</option>
+              </select>
+              <small>48 кГц — для пения, чище верх. Меньше — только если обучение не помещается в память.</small></div>
+            <div class="field"><span class="lbl">Эпох всего</span><input type="number" id="tr-ep" min="10" max="2000" step="10" value="300">
+              <small>Эпоха — один проход по всем фразам. Для 30–60 минут обычно хватает 200–400.</small></div>
+            <div class="field"><span class="lbl">Сохранять каждые</span><input type="number" id="tr-every" min="1" max="100" value="10">
+              <small>Через сколько эпох сохранять копию модели — из них потом выбирают лучшую.</small></div>
+            <div class="field"><span class="lbl">Размер пачки</span><input type="number" id="tr-batch" min="1" max="32" value="8">
+              <small>Сколько кусков учится за раз. Для 12 ГБ видеопамяти — 8; при ошибке памяти — 4–6.</small></div>
+          </div>
+          <label class="chk"><input type="checkbox" id="tr-fresh"><span>Начать заново — прежнее обучение этого голоса удалится</span></label>
+          <div class="bar">
+            <button class="btn primary" id="tr-go">Начать обучение</button>
+            <span class="dim small" id="tr-note"></span>
+          </div>
+          <div class="tr-live" id="tr-live" hidden></div>
+          <div class="hint">
+            <b>Почему эпохи сохраняются по ходу.</b> Слишком долгое обучение даёт жёсткий, «металлический» звук,
+            поэтому последняя эпоха не всегда лучшая. Её выбирают на слух на шаге 3 «Эпохи» — можно не дожидаться
+            конца обучения. Остановить можно в любой момент: сохранённые эпохи останутся, обучение можно продолжить.
+          </div>
+        </div>
+      </div>
+
+      <!-- Эпохи -->
+      <div id="v-ep" hidden>
+        <div class="panel">
+          <div class="p-h"><h3>Сравнить эпохи</h3></div>
+          <p class="note top">Один и тот же отрывок (~25 секунд) перепевается голосом каждой отмеченной эпохи.
+            Потом слушаете их по очереди <b>с того же места</b> и делаете лучшую основной — её программа
+            будет использовать на шаге «Песня».</p>
+          <div class="field"><span class="lbl">1. Отрывок для проверки — лучше партия, которой нет в датасете</span>
+            <div class="row">
+              <select id="ep-test" class="grow"></select>
+              <button class="btn sm" id="ep-pick">Выбрать файл…</button>
+            </div>
+          </div>
+          <div class="ck-tools">
+            <span class="lbl">2. Какие эпохи сравнить</span>
+            <button class="link" id="ep-some">каждую пятую</button>
+            <button class="link" id="ep-last">последние пять</button>
+            <button class="link" id="ep-none">снять отметки</button>
+          </div>
+          <div class="cks" id="ep-cks"></div>
+          <div class="bar">
+            <button class="btn primary" id="ep-go">3. Перепеть отрывок отмеченными эпохами</button>
+            <span class="grow"></span>
+            <button class="btn sm ghost" id="ep-clean" title="Освободить место: удалить файлы эпох, которые не отмечены. Основная модель хранится отдельно и не пострадает">Удалить неотмеченные эпохи…</button>
+          </div>
+          <div id="ep-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. ПЕСНЯ ================= -->
+<section id="t-song" class="tabpane" hidden>
+  <aside class="side" id="song-side">
+    <div class="side-h"><span class="cap">Песни</span></div>
+    <button class="btn primary wide" id="song-new">+ Открыть вокал…</button>
+    <div class="list" id="song-list"></div>
+    <p class="side-note">Программа работает с копией: ваш файл не меняется. Всё, что получилось, лежит в папке
+      <span class="mono" id="songs-dir"></span></p>
+  </aside>
+  <div class="content" id="song-content">
+    <div class="empty" id="song-empty">
+      <h1>Перепевка голосом DZOD</h1>
+      <p class="lead">Откройте вокал из Suno — программа очистит его и перепоёт голосом вашей модели.
+        Результат ляжет в проект Samplitude с начала и совпадёт по времени.</p>
+      <div class="steps3">
+        <div><b>1. Исходник</b><span>Вокальный стем из Suno (лучше WAV) или полный трек.</span></div>
+        <div><b>2. Чистка</b><span>Отделить бэки, убрать ревер, по желанию — шум.</span></div>
+        <div><b>3. Перепевка</b><span>Выбрать голос и настройки, сравнить с исходником.</span></div>
+      </div>
+      <button class="btn primary" id="song-new2">Открыть вокал…</button>
+    </div>
+
+    <div id="song-view" hidden>
+      <div class="rv-studio" id="studio-banner" hidden>
+        <div class="rv-plate"><small id="studio-k">FROM DZOD STUDIO · VOCALS</small><b id="studio-line"></b></div>
+        <div class="rv-info"><span class="t" id="studio-what"></span><span class="h" id="studio-note"></span></div>
+        <span class="rv-tag">ТОЛЬКО ПОКАЗ</span>
+      </div>
+      <div class="head">
+        <div>
+          <h2 id="song-name"></h2>
+          <p class="sub mono" id="song-info"></p>
+        </div>
+      </div>
+
+      <div class="panel files-panel">
+        <div class="fp-row">
+          <span class="fp-k">Исходный файл</span>
+          <span class="fp-v mono" id="fp-origin"></span>
+          <button class="btn sm" id="fp-origin-show">Показать в папке</button>
+        </div>
+        <div class="fp-row">
+          <span class="fp-k">Результаты</span>
+          <span class="fp-v mono" id="fp-dir"></span>
+          <button class="btn sm" id="song-folder">Открыть папку результатов</button>
+        </div>
+        <p class="note">В папке результатов: копия исходника, файлы чистки и все дубли перепевки. Исходный файл программа не меняет.</p>
+        <div class="fp-del">
+          <button class="btn sm ghost" id="song-clear-clean">Удалить файлы чистки…</button>
+          <button class="btn sm ghost" id="song-clear-takes">Удалить все дубли…</button>
+          <button class="btn sm ghost" id="song-del">Убрать песню из программы…</button>
+        </div>
+      </div>
+
+      <div class="panel pstep" id="p-src">
+        <div class="p-h"><span class="num">1</span><h3>Исходник</h3><span class="p-sum" id="sum-src"></span><button class="btn sm p-edit" data-p="src">Изменить</button>
+          <div class="seg" id="song-kind">
+            <button data-v="stem" class="on" title="Только голос, без музыки — стем вокала из Suno">Вокальный стем</button>
+            <button data-v="mix" title="Песня целиком: сначала нужно выделить из неё голос">Полный трек</button>
+          </div>
+        </div>
+        <div id="src-track"></div>
+      </div>
+
+      <div class="panel pstep" id="p-clean">
+        <div class="p-h"><span class="num">2</span><h3>Чистка</h3>
+          <span class="status" id="clean-when"></span><span class="p-sum" id="sum-clean"></span><button class="btn sm p-edit" data-p="clean">Изменить</button></div>
+
+        <div class="opt-row">
+          <div class="opt-k">Бэк-вокал</div>
+          <div class="opt-v">
+            <label class="chk"><input type="checkbox" id="c-backing" checked><span>Отделить бэк-вокал от ведущего</span></label>
+            <label class="chk" id="c-bsame-w"><input type="checkbox" id="c-bsame"><span>Бэки тоже очистить от ревера и шума</span></label>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Реверберация и эхо</div>
+          <div>
+            <div class="cards three" id="c-dereverb">
+              <button data-v="off"><b>С ревером</b><span>Ничего не убирать.</span></button>
+              <button data-v="uvr" class="on"><b>Без ревера — как в UVR</b><span>Пресет UVR 5: DeEcho-DeReverb, VR, окно 512. Убирает ревер и эхо, бережёт голос.</span><em>рекомендуется</em></button>
+              <button data-v="roformer"><b>Roformer</b><span>Другая нейросеть. Убирает сильнее, но может съесть часть голоса.</span></button>
+            </div>
+            <div class="aggr" id="c-aggr-w">
+              <div class="sl-top"><span>Сила (Aggression в UVR)</span><b id="c-aggr-v">50</b></div>
+              <input type="range" id="c-aggr" min="0" max="100" step="5" value="50">
+              <small>Как «Aggression Setting» в UVR. 50 — ваш пресет. Меньше — бережнее к голосу, остаётся немного ревера; больше — суше.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Шум</div>
+          <div class="opt-v"><label class="chk"><input type="checkbox" id="c-denoise"><span>Убрать шум и «стекло» — если в вокале слышно шипение или металлический призвук</span></label></div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Качество</div>
+          <div class="cards two" id="c-quality">
+            <button data-v="max" class="on"><b>Максимум</b><span>Несколько нейросетей вместе: чище, но в 2–3 раза дольше.</span><em>по умолчанию</em></button>
+            <button data-v="fast"><b>Быстро</b><span>Одна нейросеть. Для пробы.</span></button>
+          </div>
+        </div>
+
+        <div class="bar">
+          <button class="btn primary" id="clean-go">Почистить</button>
+          <span class="dim small" id="clean-dl-note"></span>
+        </div>
+        <div id="clean-tracks"></div>
+      </div>
+
+      <div class="panel">
+        <div class="p-h"><span class="num">3</span><h3>Перепевка</h3></div>
+
+        <div class="opt-row" id="v-voice-row">
+          <div class="opt-k" id="v-voice-k">Голос</div>
+          <div>
+            <select id="v-voice" hidden></select>
+            <div class="cards four" id="v-cards"></div>
+            <div class="preset-bar">
+              <span class="note" id="v-voice-note"></span>
+              <span class="grow"></span>
+              <button class="btn sm" id="v-load-folder" title="Папка вокалиста: модель .pth, индекс .index (и voice.json). Её делает DZOD Vocalist кнопкой «Сохранить вокалиста в папку…»">Загрузить вокалиста (папка)…</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Пресет<small>готовый набор настроек ниже</small></div>
+          <div>
+            <div class="cards four" id="v-presets"></div>
+            <div class="preset-bar">
+              <span class="note" id="p-state"></span>
+              <span class="grow"></span>
+              <button class="btn sm" id="p-save">Сохранить настройки как пресет…</button>
+              <button class="btn sm ghost" id="p-del">Удалить выбранный пресет</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sliders" id="sliders"></div>
+
+        <div class="opt-row">
+          <div class="opt-k">Высота тона<small>как нейросеть слышит мелодию</small></div>
+          <div class="cards four" id="v-f0">
+            <button data-v="rmvpe" class="on"><b>Точный</b><span>Лучший для пения: держит ноты и мелизмы.</span><em>рекомендуется</em></button>
+            <button data-v="hybrid[rmvpe+fcpe]"><b>Точный + мягкий</b><span>Если в «Точном» ноты местами скачут на октаву.</span></button>
+            <button data-v="fcpe"><b>Мягкий</b><span>Быстрее, сглаживает мелкие украшения.</span></button>
+            <button data-v="crepe"><b>Плавный</b><span>Для длинных тянутых нот. Медленнее всех.</span></button>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Дополнительно</div>
+          <div class="opt-v col">
+            <label class="chk"><input type="checkbox" id="v-autotune"><span>Мягкий автотюн — слегка притянуть ноты к строю</span></label>
+            <label class="chk"><input type="checkbox" id="v-cleanout"><span>Подавить шум в результате — если в перепетом голосе слышно шипение</span></label>
+            <label class="chk"><input type="checkbox" id="v-match" checked><span>Громкость как у исходника — дубль сразу встаёт в микс</span></label>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-k">Что перепеть</div>
+          <div class="opt-v">
+            <label class="chk"><input type="checkbox" id="w-lead" checked><span>Ведущий вокал</span></label>
+            <label class="chk"><input type="checkbox" id="w-backing"><span>Бэк-вокал</span></label>
+          </div>
+        </div>
+
+        <div class="bar">
+          <button class="btn primary big" id="conv-go">Перепеть</button>
+          <span class="dim small" id="conv-note"></span>
+        </div>
+
+        <div class="takes-h" id="takes-h" hidden><h3>Дубли</h3>
+          <span class="note">Каждое нажатие «Перепеть» — новый дубль-файл в папке результатов.
+            Пробел — играть / пауза, Tab — переключить «Исходник / DZOD» без остановки.</span></div>
+        <div id="takes"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer id="jobbar" hidden>
+  <div class="jb-text"><b id="jb-title"></b> <span id="jb-msg"></span></div>
+  <div class="jb-prog"><div id="jb-fill"></div></div>
+  <span class="mono small dim" id="jb-time"></span>
+  <button class="btn sm" id="jb-stop">Остановить</button>
+  <button class="btn sm" id="jb-close" hidden>OK</button>
+</footer>
+
+<div id="modal" hidden>
+  <div class="modal-box">
+    <h3 id="m-title"></h3>
+    <div id="m-text"></div>
+    <input type="text" id="m-input" hidden spellcheck="false">
+    <div class="m-btns"><button class="btn" id="m-cancel">Отмена</button><button class="btn primary" id="m-ok">OK</button></div>
+  </div>
+</div>
+<div id="toast" hidden></div>
+
+<script src="player.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

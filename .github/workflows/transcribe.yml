@@ -1,0 +1,87 @@
+name: Check MIDI from vocal (Linux, quick)
+
+# Быстрая проверка «MIDI из вокала» без полной сборки Windows: пение Executor (SoulX, процессор) по
+# tests/executor/two_phrases.mid → transcribe с отладкой выравнивания. Запуск вручную.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Среда (как Executor, процессор)
+        run: |
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.2.0" "torchaudio==2.2.0" "numpy<2.0.0" \
+            "transformers==4.41.2" "accelerate==1.11.0" "omegaconf==2.3.0" "librosa==0.11.0" "scipy==1.15.3" "soundfile==0.13.1" \
+            tqdm "g2p_en==2.1.0" "nltk==3.9.2" "mido==1.3.3" "huggingface_hub>=0.20.0,<1.0"
+          python -c "import nltk; [nltk.download(x) for x in ('cmudict','averaged_perceptron_tagger_eng')]"
+      - name: SoulX-Singer, модели
+        run: |
+          curl -sSL -o soulx.zip https://github.com/Soul-AILab/SoulX-Singer/archive/81aeb3ae772c70093c3de74dc23c92d983801ae4.zip
+          python -m zipfile -e soulx.zip . && mv SoulX-Singer-* soulx
+          python -c "from huggingface_hub import hf_hub_download as d; d('Soul-AILab/SoulX-Singer','model.pt',local_dir='models')"
+          curl -sSL -o rmvpe.pt https://huggingface.co/IAHispano/Applio/resolve/main/Resources/predictors/rmvpe.pt
+          curl -sSL -o RMVPE.py https://raw.githubusercontent.com/IAHispano/Applio/3.6.6/rvc/lib/predictors/RMVPE.py
+          python -c "import soundfile as sf; x,sr=sf.read('soulx/example/audio/en_prompt.mp3'); sf.write('en_prompt.wav',x,sr)"
+      - name: Пение (Straight) и MIDI из вокала
+        run: |
+          mkdir -p out/segs
+          python - <<'EOF'
+          import json
+          w = __import__("os").getcwd()
+          json.dump({"midi": f"{w}/tests/executor/two_phrases.mid", "src_dir": f"{w}/soulx", "model": f"{w}/models/model.pt",
+                     "prompt_wav": f"{w}/en_prompt.wav", "prompt_meta": f"{w}/soulx/example/audio/en_prompt.json",
+                     "out_wav": f"{w}/out/soulx.wav", "meta_out": f"{w}/out/meta.json", "notes_out": f"{w}/out/notes.json",
+                     "seg_dir": f"{w}/out/segs", "cache_dir": f"{w}/out/cache", "fp16": False, "device": "cpu",
+                     "style": "straight", "vibrato": 30}, open("sing.json", "w"))
+          json.dump({"input": f"{w}/out/soulx.wav", "lyrics": "I wish you were here tonight\nwe are the beautiful no",
+                     "language": "auto", "detail": "notes", "out_json": f"{w}/out/tr.json", "midi_out": f"{w}/out/tr.mid",
+                     "rmvpe": f"{w}/rmvpe.pt", "rmvpe_py": f"{w}/RMVPE.py", "align_model_dir": f"{w}/hub", "debug": True, "letters_out": f"{w}/out/letters.json", "f0_out": f"{w}/out/f0.json", "emis_out": f"{w}/out/emis.npy"},
+                    open("tr.json", "w"))
+          EOF
+          python app/workers/executor_worker.py sing.json | grep -v "@@H"
+          python app/workers/transcribe_worker.py tr.json | grep -v "@@H"
+          python - <<'EOF'
+          import json
+          r = json.load(open("out/tr.json"))
+          print("нот", len(r["notes"]), "не найдены", r["missing_words"])
+          print(" | ".join(f'{n["syl"]}:{n["pitch"]}@{n["t"]:.2f}+{n["dur"]:.2f}' for n in r["notes"]))
+          ref = [x for x in json.load(open("out/notes.json")) if x["pitch"] > 0]
+          print("эталон", " | ".join(f'{x["word"]}:{x["pitch"]}@{x["start"]:.2f}' for x in ref))
+          hit = sum(any(n["t"] <= (x["start"] + x["end"]) / 2 < n["t"] + n["dur"] and n["pitch"] == x["pitch"] for n in r["notes"]) for x in ref)
+          errs = []
+          prev = None
+          for x in ref:
+              if x["word"] != prev:
+                  errs.append(min(abs(n["t"] - x["start"]) for n in r["notes"]))
+              prev = x["word"]
+          errs.sort()
+          want = "I wish you were here - to- night we are the beau- ti- ful no -".split()
+          oks = sum(any(n["t"] <= (x["start"] + x["end"]) / 2 < n["t"] + n["dur"] and k < len(want) and n["syl"].lower() == want[k].lower()
+                        for n in r["notes"]) for k, x in enumerate(ref))
+          print(f"СЛОГИ НА СВОИХ НОТАХ: {oks} из {len(ref)}")
+          print(f"ВЫСОТА: {hit} из {len(ref)}; НАЧАЛА СЛОВ: медиана {errs[len(errs)//2]*1000:.0f} мс, макс {errs[-1]*1000:.0f} мс")
+          EOF
+      - name: Отладочные данные — в ветку debug-transcribe
+        if: always()
+        run: |
+          mkdir -p /tmp/dbg && cp out/*.json out/*.npy out/soulx.wav /tmp/dbg/ 2>/dev/null || true
+          git config user.name "ci" && git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan dbg && git rm -rf -q . && rm -rf out soulx models hub *.zip *.pt *.wav *.json RMVPE.py
+          cp /tmp/dbg/* . && git add -A && git commit -qm "debug ${{ github.run_id }}" && git push -qf origin dbg:debug-transcribe
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: transcribe-check
+          path: |
+            out/*.json
+            out/soulx.wav
+          retention-days: 1

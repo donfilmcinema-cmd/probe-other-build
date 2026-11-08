@@ -1,0 +1,6 @@
+/* DZOD Vocalist — шрифты дизайн-системы DZOD (OFL), положить TTF в assets/fonts */
+@font-face { font-family: 'PT Sans'; src: url('assets/fonts/PTSans-Regular.ttf'); font-weight: 400; }
+@font-face { font-family: 'PT Sans'; src: url('assets/fonts/PTSans-Bold.ttf'); font-weight: 700; }
+@font-face { font-family: 'PT Sans Narrow'; src: url('assets/fonts/PTSansNarrow-Bold.ttf'); font-weight: 700; }
+@font-face { font-family: 'PT Mono'; src: url('assets/fonts/PTMono-Regular.ttf'); font-weight: 400; }
+
