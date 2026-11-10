@@ -26,6 +26,7 @@ OUT = W / "out"
 OUT.mkdir(exist_ok=True)
 (OUT / "segs").mkdir(exist_ok=True)
 os.environ["NLTK_DATA"] = str(W / "nltk_data")
+os.environ["DZOD_TEXTFIX_KEEP"] = "1"
 sys.path.insert(0, str(APP))
 
 import numpy as np            # noqa: E402

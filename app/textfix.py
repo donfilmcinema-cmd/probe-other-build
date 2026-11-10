@@ -7,6 +7,7 @@
 План и шаги — shared/docs/vocalist/text-guided-revoice_RU.md (хаб).
 """
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -64,7 +65,8 @@ def analyze(ctx, source, lyrics, marks=None, language="auto"):
         ctx.span(0.0, 1.0, "Текст по записи…")
         return _prepare(ctx, tmp, Path(source), lyrics, marks, language)
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.environ.get("DZOD_TEXTFIX_KEEP"):             # отладка: оставить промежуточные файлы
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", hint="auto"):
@@ -122,4 +124,5 @@ def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", h
         return {"file": str(out), "plan": plan["plan"], "words": plan["words"], "changed": r.get("changed", []),
                 "seconds": round(time.time() - t_all, 1)}
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.environ.get("DZOD_TEXTFIX_KEEP"):             # отладка: оставить промежуточные файлы
+            shutil.rmtree(tmp, ignore_errors=True)
