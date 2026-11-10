@@ -92,7 +92,7 @@ E.exec_env = lambda: env
 E.paths = lambda: types.SimpleNamespace(
     exec_py=EXEC_PY, applio_py=APPLIO_PY, applio=W / "applio", exec=W / "exec", exec_src=W / "soulx",
     exec_model=W / "models/model.pt", exec_prompt_wav=W / "en_prompt.wav",
-    exec_prompt_meta=W / "soulx/example/audio/en_prompt.json")
+    exec_prompt_meta=W / "soulx/example/audio/en_prompt.json", uv_cache=W / "uvc", python_dir=W / "uvp")
 (W / "exec").mkdir(exist_ok=True)
 _n = [0]
 
