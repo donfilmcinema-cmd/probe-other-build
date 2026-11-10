@@ -194,9 +194,21 @@ rB = TF.revoice_text(ctx, OUT / "clean.wav", OUT / "take_clean.wav", item, LYR,
                      [{"from": k0, "to": k0 + 4, "replace": "never"}], OUT / "replaced.wav")
 LYR_B = LYR.replace("wish", "never", 1)
 RES["B_outside_identical"] = outside_same(OUT / "replaced.wav", OUT / "take_clean.wav", rB["changed"])
-RES["B_never_on_take"] = word_at(OUT / "take_clean.wav", LYR_B, 1, "en", "B_take")
-RES["B_never_on_replaced"] = word_at(OUT / "replaced.wav", LYR_B, 1, "en", "B_rep")
-okB = RES["B_outside_identical"] and (RES["B_never_on_replaced"]["score"] or 0) > (RES["B_never_on_take"]["score"] or 0)
+RES["B_plan"] = [{k: q.get(k) for k in ("found", "where", "t0", "t1", "text")} for q in rB["plan"]]
+
+
+def score(f, a, b, words, lang):
+    return run(EXEC_PY, WORK / "textfix_worker.py",
+               {"step": "score", "input": str(f), "a": a, "b": b, "words": words, "language": lang,
+                "align_model_dir": str(W / "exec" / "align")})
+
+
+bp = rB["plan"][0]
+RES["B_take_scores"] = score(OUT / "take_clean.wav", bp["t0"] - 0.1, bp["t1"] + 0.1, ["never", "wish"], "en")
+RES["B_replaced_scores"] = score(OUT / "replaced.wav", bp["t0"] - 0.1, bp["t1"] + 0.1, ["never", "wish"], "en")
+okB = (RES["B_outside_identical"]
+       and RES["B_replaced_scores"]["never"] - RES["B_replaced_scores"]["wish"]
+       > RES["B_take_scores"]["never"] - RES["B_take_scores"]["wish"])
 
 # ---- В. русский: исходник — речь Piper (голос dmitri), подсказка — Piper (irina); «съедено» слово «чудное»
 okC = True
@@ -227,8 +239,17 @@ if (W / "piper" / "ru_RU-dmitri-medium.onnx").exists():
     s2, e2 = int(wc["t0"] * ysr2), int(wc["t1"] * ysr2)
     lv = lambda v: round(float(20 * np.log10(np.sqrt(np.mean(v[s2:e2, 0] ** 2)) + 1e-9)), 1)  # noqa: E731
     RES["C_level_dB"] = {"clean": lv(yc2), "dirty": lv(yd2), "fixed": lv(yf2)}
+    for name in ("take_dirty", "fixed", "take_clean"):
+        RES[f"C_score_{name}"] = score(OUT / f"ru_{name}.wav", wc["t0"] - 0.1, wc["t1"] + 0.1, ["чудное"], "ru")["чудное"]
+
+    def mf2(v):
+        return librosa.feature.mfcc(y=v[s2:e2, 0].astype(np.float32), sr=ysr2, n_mfcc=20)[1:]
+    m2 = min(mf2(yc2).shape[1], mf2(yd2).shape[1], mf2(yf2).shape[1])
+    RES["C_mfcc"] = {"dirty_vs_clean": round(float(np.mean(np.linalg.norm(mf2(yd2)[:, :m2] - mf2(yc2)[:, :m2], axis=0))), 2),
+                     "fixed_vs_clean": round(float(np.mean(np.linalg.norm(mf2(yf2)[:, :m2] - mf2(yc2)[:, :m2], axis=0))), 2)}
     okC = (RES["C_outside_identical"]
-           and (RES["C_word_fixed"]["score"] or 0) > (RES["C_word_take_dirty"]["score"] or 0)
+           and RES["C_score_fixed"] > RES["C_score_take_dirty"]
+           and RES["C_mfcc"]["fixed_vs_clean"] < RES["C_mfcc"]["dirty_vs_clean"]
            and abs(RES["C_level_dB"]["fixed"] - RES["C_level_dB"]["clean"]) < abs(RES["C_level_dB"]["dirty"] - RES["C_level_dB"]["clean"]))
 else:
     print("== русский: Piper не установлен — пропуск")

@@ -31,29 +31,57 @@ def say(kind, payload):
 
 
 # ------------------------------------------------------------------ prepare
-def plan_marks(words, marks, f0_t, f0_midi, total):
+def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
     """words — выравнивание (align_out["words"]), marks — [{from, to, replace?}] по символам текста.
+    db — громкость по кадрам (дБ, 10 мс) — для поиска «дыры» на месте съеденного слова.
     Возвращает список пометок: слова, цель [t0, t1], текст для пения, соседи для подсказки."""
     import numpy as np
-    found = [i for i, w in enumerate(words) if w["t0"] is not None]
+    sc = sorted(w["score"] for w in words if w.get("score") is not None)
+    med = sc[len(sc) // 2] if sc else 0.0
+
+    def reliable(k):
+        w = words[k]
+        if w["t0"] is None:
+            return False
+        if w["t1"] - w["t0"] < 0.03 * len(w["text"]) + 0.06:      # слово сжато в пару кадров — выравнивание не нашло
+            return False
+        return not (w.get("score") is not None and med > 0 and w["score"] < 0.3 * med)
+
+    found = [k for k in range(len(words)) if reliable(k)]
+
+    def holes(lo, hi):
+        """Провалы громкости между lo и hi (съеденное место): ниже громкой части записи на 20 дБ, от 0,12 с."""
+        if db is None:
+            return []
+        ref = float(np.percentile(db[np.isfinite(db)], 85))
+        a_, b_ = int(lo * fps), min(len(db), int(hi * fps))
+        res, k = [], a_
+        while k < b_:
+            if db[k] < ref - 20:
+                m = k
+                while m < b_ and db[m] < ref - 20:
+                    m += 1
+                if (m - k) / fps >= 0.12 and k > a_ and m < b_:   # дыра внутри, а не пауза до/после соседей
+                    res.append((k / fps, m / fps))
+                k = m
+            else:
+                k += 1
+        return res
+
     out = []
     for mk in marks:
         a, b = int(mk["from"]), int(mk["to"])
-        wi = [i for i, w in enumerate(words) if w["from"] < b and w["to"] > a]
+        wi = [k for k, w in enumerate(words) if w["from"] < b and w["to"] > a]
         if not wi:
             out.append({"mark": mk, "found": False, "why": "пометка не попала ни на одно слово текста"})
             continue
         i0, i1 = wi[0], wi[-1]
-        prev = [i for i in found if i < i0]
-        nxt = [i for i in found if i > i1]
-        have = [i for i in wi if words[i]["t0"] is not None]
-        if have:
-            t0, t1 = words[have[0]]["t0"], words[have[-1]]["t1"]
-            # слова пометки, которых нет в звуке (съедены), — в промежуток до соседей
-            if words[i0]["t0"] is None and prev:
-                t0 = max(words[prev[-1]]["t1"], t0 - 0.12 * len(words[i0]["text"]))
-            if words[i1]["t0"] is None and nxt:
-                t1 = min(words[nxt[0]]["t0"], t1 + 0.12 * len(words[i1]["text"]))
+        prev = [k for k in found if k < i0]
+        nxt = [k for k in found if k > i1]
+        lo = words[prev[-1]]["t1"] if prev else 0.0
+        hi = words[nxt[0]]["t0"] if nxt else total
+        if all(reliable(k) for k in wi):
+            t0, t1 = words[i0]["t0"], words[i1]["t1"]
             where = "found"
             # помечено — значит, в этом месте звук испорчен: выравнивание находит только остаток слова.
             # Слово тянется до следующего слова (если оно ближе 1 с — дальше уже пауза). Назад — нет: конец
@@ -61,14 +89,19 @@ def plan_marks(words, marks, f0_t, f0_midi, total):
             if nxt and 0 < words[nxt[0]]["t0"] - t1 < 1.0:
                 t1 = words[nxt[0]]["t0"] - 0.02
         else:
-            # всё помеченное съедено: место — промежуток между найденными соседями
-            lo = words[prev[-1]]["t1"] if prev else 0.0
-            hi = words[nxt[0]]["t0"] if nxt else total
-            need = sum(0.09 * len(words[i]["text"]) for i in wi) + 0.1
-            if hi - lo > need * 1.6:              # промежуток длинный: слово — ближе к предыдущему (паузы чаще после)
-                hi = lo + need
-            t0, t1 = lo, hi
-            where = "gap"
+            hs = holes(lo, hi)
+            if hs:
+                # съеденное слово — в провал громкости между надёжными соседями (самый длинный)
+                h0, h1 = max(hs, key=lambda h: h[1] - h[0])
+                t0, t1 = h0 - 0.03, h1 + 0.03
+                where = "hole"
+            else:
+                # провала нет: промежуток между надёжными соседями
+                need = sum(0.09 * len(words[k]["text"]) for k in wi) + 0.1
+                if hi - lo > need * 1.6:          # промежуток длинный: слово — ближе к предыдущему (паузы чаще после)
+                    hi = lo + need
+                t0, t1 = lo, hi
+                where = "gap"
         if t1 - t0 < 0.08:
             t0, t1 = t0 - 0.04, t1 + 0.04
         t0, t1 = max(0.0, t0), min(total, t1)
@@ -175,7 +208,10 @@ def step_prepare(job):
     med = sc[len(sc) // 2] if sc else 0.0
     for w in words:
         w["suspect"] = w["t0"] is None or (w["score"] is not None and med > 0 and w["score"] < 0.35 * med)
-    plan = plan_marks(words, job.get("marks") or [], f0_t, f0_midi, total)
+    hop = 160
+    rms = np.sqrt(np.convolve(x16.astype(np.float64) ** 2, np.ones(hop * 3) / (hop * 3), "same")[::hop] + 1e-12)
+    db = 20 * np.log10(rms)
+    plan = plan_marks(words, job.get("marks") or [], f0_t, f0_midi, total, db, fps)
     notes = hint_notes(plan, words, f0_t, f0_midi, lang, T.syllables)
     if notes:
         T.write_midi(job["hint_midi"], notes, 120.0)
@@ -339,9 +375,16 @@ def step_piper(job):
         toks = [(w, 0) for w in before + mine + after]
         try:
             lt = T.align(np.ascontiguousarray(x16, dtype=np.float32), toks, lang, dict(job))
-            got = [[y for y in lt[i] if y] for i in range(len(before), len(before) + len(mine))]
-            a = min(g[0][0] for g in got if g) - 0.02
-            b = max(g[-1][1] for g in got if g) + 0.02
+            spans = [[y for y in w_ if y] for w_ in lt]
+            got = spans[len(before):len(before) + len(mine)]
+            my0 = min(g[0][0] for g in got if g)
+            my1 = max(g[-1][1] for g in got if g)
+            # границы слова — посередине между соседями: выравнивание ставит буквы по пикам, края слова (согласная
+            # в начале, гласная в конце) лежат за пиками
+            pv = spans[len(before) - 1] if before and spans[len(before) - 1] else None
+            nx = spans[len(before) + len(mine)] if after and spans[len(before) + len(mine)] else None
+            a = (pv[-1][1] + my0) / 2 if pv else my0 - 0.06
+            b = (my1 + nx[0][0]) / 2 if nx else my1 + 0.10
         except Exception:  # noqa: BLE001 — выравнивания нет: доля по буквам
             n_all = sum(len(w) for w, _ in toks) or 1
             a = len(x) / sr * sum(len(w) for w in before) / n_all
@@ -356,10 +399,25 @@ def step_piper(job):
     return {"out_wav": job["out_wav"], "hints": len(found)}
 
 
+def step_score(job):
+    """Проверка: в окне [a, b] записи — насколько выравнивание «слышит» каждое слово-кандидата (средняя уверенность букв)."""
+    import numpy as np
+    import transcribe_worker as T
+    x16 = T.load_mono16(job["input"])
+    a, b = int(job["a"] * 16000), int(job["b"] * 16000)
+    seg = np.ascontiguousarray(x16[max(0, a):b], dtype=np.float32)
+    res = {}
+    for w in job["words"]:
+        tj = dict(job)
+        T.align(seg, [(w, 0)], job.get("language") or "en", tj)
+        res[w] = round(float((tj.get("_wscore") or [0.0])[0]), 4)
+    return res
+
+
 def main():
     job = json.load(open(sys.argv[1], encoding="utf-8"))
     step = job.get("step")
-    fn = {"prepare": step_prepare, "content": step_content, "splice": step_splice, "piper": step_piper}.get(step)
+    fn = {"prepare": step_prepare, "content": step_content, "splice": step_splice, "piper": step_piper, "score": step_score}.get(step)
     if not fn:
         raise RuntimeError(f"Неизвестный шаг: {step}")
     say("R", json.dumps(fn(job), ensure_ascii=False))
