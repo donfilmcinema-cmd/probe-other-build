@@ -39,21 +39,30 @@ VOW_RU = set("аеёиоуыэюя")
 VOW_EN = set("aeiouy")
 
 
-def words_of(lyrics):
-    """[(слово как в тексте, строка)] — только слова с буквами; цифры и знаки отбрасываются."""
+def words_pos(lyrics):
+    """[(слово как в тексте, строка, начало, конец)] — начало/конец — позиция символов в lyrics (для пометок по вхождению).
+    Только слова с буквами; метки частей песни — [Verse 1], [Chorus], (x2), {Bridge} — и пустые строки не поются."""
     out = []
     li = -1
-    for line in lyrics.splitlines():
-        # метки частей песни — [Verse 1], [Chorus], (x2), {Bridge} — и пустые строки не поются
-        line = re.sub(r"\[[^\]]*\]|\{[^}]*\}|\((?:x|х)?\s*\d+\s*(?:x|х|раза?)?\)", " ", line, flags=re.I)
-        if not re.search(r"[A-Za-zА-Яа-яЁё]", line):
-            continue
-        li += 1
-        for w in re.findall(r"[A-Za-zА-Яа-яЁё']+(?:-[A-Za-zА-Яа-яЁё']+)*", line):
-            w = w.strip("'")
-            if re.search(r"[A-Za-zА-Яа-яЁё]", w):
-                out.append((w, li))
+    pos = 0
+    tag = re.compile(r"\[[^\]]*\]|\{[^}]*\}|\((?:x|х)?\s*\d+\s*(?:x|х|раза?)?\)", re.I)
+    for line in lyrics.split("\n"):
+        clean = tag.sub(lambda m: " " * len(m.group()), line)
+        if re.search(r"[A-Za-zА-Яа-яЁё]", clean):
+            li += 1
+            for m in re.finditer(r"[A-Za-zА-Яа-яЁё']+(?:-[A-Za-zА-Яа-яЁё']+)*", clean):
+                w = m.group()
+                a = m.start() + (len(w) - len(w.lstrip("'")))
+                w = w.strip("'")
+                if re.search(r"[A-Za-zА-Яа-яЁё]", w):
+                    out.append((w, li, pos + a, pos + a + len(w)))
+        pos += len(line) + 1
     return out
+
+
+def words_of(lyrics):
+    """[(слово как в тексте, строка)]."""
+    return [(w, li) for w, li, _a, _b in words_pos(lyrics)]
 
 
 def detect_lang(lyrics):
@@ -290,6 +299,7 @@ def align(x16, words, lang, job):
                      f"уверенность {wscore[wi]:.3f} (медиана {med:.3f}){' — нет в звуке' if bad else ''}")
         if bad:
             letters[wi] = [None] * len(lt)
+    job["_wscore"] = wscore
     return letters
 
 
@@ -399,6 +409,17 @@ def main():
         letters = [[tuple(x) if x else None for x in lt] for lt in json.load(open(job["letters_in"], encoding="utf-8"))]
     else:
         letters = align(x16, words, lang, job)
+    if job.get("align_out"):
+        # перепевка с текстом: каждое слово текста — где в тексте, где в звуке (или null), уверенность
+        ws = job.get("_wscore") or []
+        al = []
+        for wi, ((w, li, ca, cb), lt) in enumerate(zip(words_pos(lyrics), letters)):
+            known = [x for x in lt if x]
+            al.append({"text": w, "line": li, "from": ca, "to": cb,
+                       "t0": round(known[0][0], 3) if known else None, "t1": round(known[-1][1], 3) if known else None,
+                       "letters": [[round(x[0], 3), round(x[1], 3)] if x else None for x in lt],
+                       "score": round(ws[wi], 4) if wi < len(ws) else None})
+        json.dump({"language": lang, "words": al}, open(job["align_out"], "w", encoding="utf-8"), ensure_ascii=False)
     if job.get("letters_out"):
         json.dump([[list(x) if x else None for x in lt] for lt in letters], open(job["letters_out"], "w", encoding="utf-8"))
     say("P", "0.80 Слоги и ноты…")

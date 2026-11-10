@@ -1,0 +1,69 @@
+name: Revoice with text — check (Linux, CPU)
+
+# «Перепевка с текстом» на синтетике: съеденное слово «wish» → пометка → исправление. Запуск вручную.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  textfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Среда Executor (SoulX, выравнивание)
+        run: |
+          mkdir -p w && cd w
+          python -m venv venv_exec
+          venv_exec/bin/pip install -q --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.2.0" "torchaudio==2.2.0" "numpy<2.0.0" \
+            "transformers==4.41.2" "accelerate==1.11.0" "omegaconf==2.3.0" "librosa==0.11.0" "scipy==1.15.3" "soundfile==0.13.1" \
+            tqdm "g2p_en==2.1.0" "nltk==3.9.2" "mido==1.3.3" "huggingface_hub>=0.20.0,<1.0"
+          NLTK_DATA=$PWD/nltk_data venv_exec/bin/python -c "import nltk; [nltk.download(x, download_dir='nltk_data') for x in ('cmudict','averaged_perceptron_tagger_eng')]"
+          curl -sSL -o soulx.zip https://github.com/Soul-AILab/SoulX-Singer/archive/81aeb3ae772c70093c3de74dc23c92d983801ae4.zip
+          python -m zipfile -e soulx.zip . && mv SoulX-Singer-* soulx
+          venv_exec/bin/python -c "from huggingface_hub import hf_hub_download as d; d('Soul-AILab/SoulX-Singer','model.pt',local_dir='models')"
+          venv_exec/bin/python -c "import soundfile as sf; x,sr=sf.read('soulx/example/audio/en_prompt.mp3'); sf.write('en_prompt.wav',x,sr)"
+      - name: Среда Applio 3.6.6 (процессор) и голос для проверки
+        run: |
+          cd w
+          curl -sSL -o applio.zip https://github.com/IAHispano/Applio/archive/refs/tags/3.6.6.zip
+          python -m zipfile -e applio.zip . && mv Applio-3.6.6 applio
+          python -m venv venv_applio
+          grep -v -iE "onnxruntime-gpu|nvidia-|^(torch|torchaudio)==" applio/requirements-engine.txt > req.txt
+          venv_applio/bin/pip install -q --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.11.0" "torchaudio==2.11.0"
+          venv_applio/bin/pip install -q -r req.txt
+          B=https://huggingface.co/IAHispano/Applio/resolve/main/Resources
+          mkdir -p applio/rvc/models/embedders/contentvec applio/rvc/models/predictors applio/rvc/models/pretraineds/hifi-gan
+          curl -sSL -o applio/rvc/models/embedders/contentvec/pytorch_model.bin $B/embedders/contentvec/pytorch_model.bin
+          curl -sSL -o applio/rvc/models/embedders/contentvec/config.json $B/embedders/contentvec/config.json
+          curl -sSL -o applio/rvc/models/predictors/rmvpe.pt $B/predictors/rmvpe.pt
+          curl -sSL -o f0G40k.pth $B/pretrained_v2/f0G40k.pth
+          # голос для проверки: предобученный генератор RVC v2 40k как модель (без обучения)
+          venv_applio/bin/python - <<'PY'
+          import torch
+          ck = torch.load("f0G40k.pth", map_location="cpu", weights_only=False)
+          sd = ck.get("model", ck)
+          w = {k: v.half() for k, v in sd.items() if not k.startswith("enc_q")}
+          cfg = [1025, 32, 192, 192, 768, 2, 6, 3, 0, "1", [3, 7, 11], [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+                 [10, 10, 2, 2], 512, [16, 16, 4, 4], 109, 256, 40000]
+          torch.save({"weight": w, "config": cfg, "info": "test", "sr": "40k", "f0": 1, "version": "v2",
+                      "vocoder": "HiFi-GAN"}, "test_voice.pth")
+          print("голос для проверки готов")
+          PY
+      - name: Проверка
+        run: |
+          python -m venv w/venv_test
+          w/venv_test/bin/pip install -q "numpy<2.0.0" "soundfile==0.13.1" "librosa==0.11.0" "scipy==1.15.3"
+          w/venv_test/bin/python tests/textfix/run_test.py w
+      - name: Результат — в ветку debug-textfix
+        if: always()
+        run: |
+          mkdir -p /tmp/dbg && cp w/out/*.json /tmp/dbg/ 2>/dev/null; cp w/out/clean.wav w/out/dirty.wav w/out/take_dirty.wav w/out/take_clean.wav w/out/fixed.wav /tmp/dbg/ 2>/dev/null || true
+          git config user.name "ci" && git config user.email "ci@users.noreply.github.com"
+          git checkout -q --orphan dbg && git rm -rf -q . && rm -rf w
+          cp /tmp/dbg/* . 2>/dev/null; git add -A && git commit -qm "textfix ${{ github.run_id }}" && git push -qf origin dbg:debug-textfix
