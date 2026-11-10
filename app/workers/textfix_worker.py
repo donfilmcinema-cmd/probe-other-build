@@ -86,8 +86,12 @@ def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
             # помечено — значит, в этом месте звук испорчен: выравнивание находит только остаток слова.
             # Слово тянется до следующего слова (если оно ближе 1 с — дальше уже пауза). Назад — нет: конец
             # предыдущего слова выравнивание ставит рано (долгая гласная поётся дольше) — можно задеть его гласную
-            if nxt and 0 < words[nxt[0]]["t0"] - t1 < 1.0:
-                t1 = words[nxt[0]]["t0"] - 0.02
+            # до следующего слова текста (даже ненадёжного — через слово не перескакиваем)
+            nn = i1 + 1
+            nt = words[nn]["t0"] if nn < len(words) and words[nn]["t0"] is not None and words[nn]["t0"] > t1 else (
+                words[nxt[0]]["t0"] if nxt else None)
+            if nt is not None and 0 < nt - t1 < 1.0:
+                t1 = nt - 0.02
         else:
             hs = holes(lo, hi)
             if hs:
@@ -115,7 +119,15 @@ def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
         else:
             near = np.flatnonzero(~np.isnan(f0_midi))
             pitch = float(f0_midi[near[np.argmin(np.abs(f0_t[near] - (t0 + t1) / 2))]]) if len(near) else 60.0
+        # где менять содержание: съедено (провал громкости внутри слова) — только провал ±40 мс, целые края слова
+        # остаются родными; провала нет (слово «смазано») и замена слова — всё помеченное место
+        win = [[t0, t1]]
+        if not mk.get("replace"):
+            hs = holes(t0 - 0.05, t1 + 0.05)
+            if hs:
+                win = [[max(t0, h0 - 0.04), min(t1, h1 + 0.04)] for h0, h1 in hs]
         out.append({"mark": mk, "found": True, "where": where, "words": wi, "t0": round(t0, 3), "t1": round(t1, 3),
+                    "windows": [[round(a_, 3), round(b_, 3)] for a_, b_ in win],
                     "text": text, "replace": bool(mk.get("replace")), "pitch": round(pitch, 2),
                     "ctx_prev": ctx_prev, "ctx_next": ctx_next})
     return out
@@ -231,13 +243,14 @@ def _fade(n):
 def regions_of(plan, total):
     """Окна перепевки: пометка ± PAD; пересекающиеся — сливаются."""
     rs = []
-    for p in sorted([p for p in plan if p.get("found")], key=lambda p: p["t0"]):
-        a, b = max(0.0, p["t0"] - PAD), min(total, p["t1"] + PAD)
+    wins = sorted(w for p in plan if p.get("found") for w in (p.get("windows") or [[p["t0"], p["t1"]]]))
+    for w0, w1 in wins:
+        a, b = max(0.0, w0 - PAD), min(total, w1 + PAD)
         if rs and a <= rs[-1]["b"]:
             rs[-1]["b"] = max(rs[-1]["b"], b)
-            rs[-1]["spans"].append([p["t0"], p["t1"]])
+            rs[-1]["spans"].append([w0, w1])
         else:
-            rs.append({"a": a, "b": b, "spans": [[p["t0"], p["t1"]]]})
+            rs.append({"a": a, "b": b, "spans": [[w0, w1]]})
     return rs
 
 
@@ -262,10 +275,8 @@ def step_content(job):
     def rms(v):
         return float(np.sqrt(np.mean(v ** 2))) if len(v) else 0.0
 
-    for p in plan["plan"]:
-        if not p.get("found"):
-            continue
-        a, b = int(p["t0"] * sr), int(p["t1"] * sr)
+    for p, (w0, w1) in [(p, w) for p in plan["plan"] if p.get("found") for w in (p.get("windows") or [[p["t0"], p["t1"]]])]:
+        a, b = int(w0 * sr), int(w1 * sr)
         a0, b1 = max(0, a - xf), min(len(x), b + xf)
         seg = h[a0:b1].copy()
         # уровень подсказки — как у исходника рядом (в провале исходник тих: берём соседей)
