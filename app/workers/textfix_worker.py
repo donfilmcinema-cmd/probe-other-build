@@ -3,11 +3,12 @@
 
     python textfix_worker.py job.json
 
-Три шага (job["step"]):
+Шаги (job["step"]):
   prepare — выравнивание текста по исходнику, высота (RMVPE), план пометок, MIDI подсказки (для executor_worker);
             ответ: plan.json
   content — «звук для содержания»: исходник, где только помеченные места заменены подсказкой (спетой SoulX по MIDI
             подсказки); куски-«окна» вокруг пометок для перепевки (исходник + содержание)
+  piper   — подсказка речью Piper (русский; или английский без SoulX): вместо пения SoulX по MIDI подсказки
   splice  — готовая перепевка (дубль) + перепетые окна → дубль, где изменены только помеченные места
 
 Строки для программы:  @@P <доля> <текст>  /  @@R <json>  /  @@E <текст>
@@ -299,10 +300,66 @@ def step_splice(job):
     return {"out": job["out"], "changed": changed}
 
 
+# ------------------------------------------------------------------ piper (русский, или запасной путь)
+def _stretch(seg, n):
+    """Растяжка/сжатие куска до n отсчётов без смены высоты (фазовый вокодер librosa)."""
+    import numpy as np
+    import librosa
+    if len(seg) < 64 or n < 64:
+        return np.zeros(n)
+    rate = float(np.clip(len(seg) / n, 0.33, 3.0))
+    y = librosa.effects.time_stretch(seg.astype(np.float32), rate=rate)
+    if len(y) >= n:
+        return y[:n].astype(np.float64)
+    return np.pad(y, (0, n - len(y))).astype(np.float64)
+
+
+def step_piper(job):
+    """Подсказка речью Piper: фраза (соседи + помеченное) → помеченное слово вырезается по выравниванию →
+    растягивается на время слова в записи → кладётся в ту же точку времени."""
+    import numpy as np
+    import soundfile as sf
+    import librosa
+    import transcribe_worker as T
+    from piper import PiperVoice
+    plan = json.load(open(job["plan"], encoding="utf-8"))
+    words, lang = plan["words"], plan["language"]
+    voice = PiperVoice.load(job["voice"])
+    sr = int(voice.config.sample_rate)
+    hint = np.zeros(int(plan["seconds"] * sr) + sr)
+    found = [p for p in plan["plan"] if p.get("found")]
+    for k, p in enumerate(found):
+        say("P", f"{0.05 + 0.9 * k / max(1, len(found)):.2f} Подсказка речью: «{p['text']}»")
+        before = [words[p["ctx_prev"]]["text"]] if p.get("ctx_prev") is not None else []
+        after = [words[p["ctx_next"]]["text"]] if p.get("ctx_next") is not None else []
+        mine = p["text"].split()
+        phrase = " ".join(before + mine + after)
+        x = np.concatenate([c.audio_float_array for c in voice.synthesize(phrase)]).astype(np.float64)
+        x16 = librosa.resample(x.astype(np.float32), orig_sr=sr, target_sr=16000)
+        toks = [(w, 0) for w in before + mine + after]
+        try:
+            lt = T.align(np.ascontiguousarray(x16, dtype=np.float32), toks, lang, dict(job))
+            got = [[y for y in lt[i] if y] for i in range(len(before), len(before) + len(mine))]
+            a = min(g[0][0] for g in got if g) - 0.02
+            b = max(g[-1][1] for g in got if g) + 0.02
+        except Exception:  # noqa: BLE001 — выравнивания нет: доля по буквам
+            n_all = sum(len(w) for w, _ in toks) or 1
+            a = len(x) / sr * sum(len(w) for w in before) / n_all
+            b = a + len(x) / sr * sum(len(w) for w in mine) / n_all
+        a, b = max(0.0, a), min(len(x) / sr, b)
+        seg = x[int(a * sr):int(b * sr)]
+        n = int((p["t1"] - p["t0"]) * sr)
+        y = _stretch(seg, n)
+        i0 = int(p["t0"] * sr)
+        hint[i0:i0 + n] = y[:max(0, min(n, len(hint) - i0))]
+    sf.write(job["out_wav"], hint.astype(np.float32), sr, subtype="FLOAT")
+    return {"out_wav": job["out_wav"], "hints": len(found)}
+
+
 def main():
     job = json.load(open(sys.argv[1], encoding="utf-8"))
     step = job.get("step")
-    fn = {"prepare": step_prepare, "content": step_content, "splice": step_splice}.get(step)
+    fn = {"prepare": step_prepare, "content": step_content, "splice": step_splice, "piper": step_piper}.get(step)
     if not fn:
         raise RuntimeError(f"Неизвестный шаг: {step}")
     say("R", json.dumps(fn(job), ensure_ascii=False))

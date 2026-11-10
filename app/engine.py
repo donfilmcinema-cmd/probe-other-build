@@ -54,6 +54,11 @@ EXEC_COMMIT = "81aeb3ae772c70093c3de74dc23c92d983801ae4"
 EXEC_ZIP = f"https://github.com/Soul-AILab/SoulX-Singer/archive/{EXEC_COMMIT}.zip"
 EXEC_HF_REPO = "Soul-AILab/SoulX-Singer"
 EXEC_TORCH_INDEX = "https://download.pytorch.org/whl/cu121"
+# «Перепевка с текстом», русский: подсказка речью Piper (GPLv3, ставится по требованию в среду Executor).
+# Голос подсказки в результат не попадает — из него берётся только содержание (какие звуки).
+PIPER_PKG = "piper-tts==1.3.0"
+PIPER_VOICE = "ru_RU-irina-medium"
+PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU/irina/medium/" + PIPER_VOICE
 EXEC_PACKAGES = ["torch==2.2.0", "torchaudio==2.2.0", "numpy<2.0.0", "transformers==4.41.2", "accelerate==1.11.0",
                  "omegaconf==2.3.0", "librosa==0.11.0", "scipy==1.15.3", "soundfile==0.13.1", "tqdm",
                  "g2p_en==2.1.0", "nltk==3.9.2", "mido==1.3.3", "huggingface_hub>=0.20.0"]
@@ -193,6 +198,8 @@ class Paths:
         self.exec_nltk = self.exec / "nltk_data"
         self.exec_prompt_wav = self.exec / "prompt" / "en_prompt.wav"
         self.exec_prompt_meta = self.exec / "prompt" / "en_prompt.json"
+        self.exec_piper = self.exec / "piper"
+        self.exec_piper_voice = self.exec_piper / f"{PIPER_VOICE}.onnx"
         self.tmp = e / "tmp"
         self.status = e / "status.json"
 
@@ -712,6 +719,24 @@ EXEC_STEPS = [
     ("exec_model", "Модель пения SoulX-Singer (около 3 ГБ)", 0.4),
     ("exec_check", "Проверка", 0.05),
 ]
+
+
+def piper_ready():
+    p = paths()
+    return marker("exec_piper").exists() and p.exec_piper_voice.exists()
+
+
+def install_piper(ctx):
+    """Piper для подсказки русских слов: пакет в среду Executor + голос (~60 МБ). Нужен интернет один раз."""
+    if piper_ready():
+        return
+    p = paths()
+    ctx.span(0.0, 0.7, "Piper — синтез речи для русских подсказок…")
+    _uv(ctx, ["pip", "install", "-p", p.exec_py, PIPER_PKG, "numpy<2.0.0"], "Установка Piper")
+    ctx.span(0.7, 1.0, "Голос Piper (русский)…")
+    for ext in (".onnx", ".onnx.json"):
+        download(PIPER_URL + ext, p.exec_piper / (PIPER_VOICE + ext), ctx, "Голос Piper")
+    marker("exec_piper").write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
 
 
 def executor_status():

@@ -43,6 +43,18 @@ def _prepare(ctx, tmp, source, lyrics, marks, language):
     return json.loads((tmp / "plan.json").read_text(encoding="utf-8"))
 
 
+def _soulx_hint(ctx, tmp, p, workers):
+    ctx.span(0.25, 0.55, "Подсказка звучания (SoulX-Singer)…")
+    (tmp / "segs").mkdir(exist_ok=True)
+    hj = {"midi": str(tmp / "hint.mid"), "src_dir": str(p.exec_src), "model": str(p.exec_model),
+          "prompt_wav": str(p.exec_prompt_wav), "prompt_meta": str(p.exec_prompt_meta),
+          "out_wav": str(tmp / "hint.wav"), "meta_out": str(tmp / "hint_meta.json"),
+          "notes_out": str(tmp / "hint_notes.json"), "seg_dir": str(tmp / "segs"),
+          "cache_dir": str(p.exec / "cache" / "soulx"), "fp16": True, "style": "straight", "vibrato": 0}
+    ctx.run([p.exec_py, workers / "executor_worker.py", _job(tmp, "hint", hj)], cwd=p.exec_src,
+            env=E.exec_env(), what="Подсказка звучания")
+
+
 def analyze(ctx, source, lyrics, marks=None, language="auto"):
     """Только разбор: где в записи каждое слово текста, подозрительные (возможно, съедены), где найдены пометки.
     Для окна «Текст» — подсветка и «найденное место» до перепевки."""
@@ -55,10 +67,10 @@ def analyze(ctx, source, lyrics, marks=None, language="auto"):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto"):
+def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", hint="auto"):
     """source — исходник (тот, что перепевали), take — готовый дубль, item — настройки той перепевки
     (model, index, pitch, index_rate, protect, …), marks — [{from, to, replace?}] по символам lyrics.
-    Пишет out; возвращает план, изменённые отрезки, время."""
+    hint: auto (английский — SoulX, русский — Piper) | piper. Пишет out; возвращает план, изменённые отрезки, время."""
     _need_executor()
     p = E.paths()
     workers = E.ensure_workers()
@@ -74,16 +86,19 @@ def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto"):
         found = [m for m in plan["plan"] if m.get("found")]
         if not found:
             raise E.EngineError("Ни одна пометка не найдена в записи: проверьте, что текст совпадает с тем, что поётся.")
-        # 2. подсказка нужного звучания — SoulX-Singer поёт помеченные слова (с соседями) в их времени и высоте
-        ctx.span(0.25, 0.55, "Подсказка звучания (SoulX-Singer)…")
-        (tmp / "segs").mkdir()
-        hj = {"midi": str(tmp / "hint.mid"), "src_dir": str(p.exec_src), "model": str(p.exec_model),
-              "prompt_wav": str(p.exec_prompt_wav), "prompt_meta": str(p.exec_prompt_meta),
-              "out_wav": str(tmp / "hint.wav"), "meta_out": str(tmp / "hint_meta.json"),
-              "notes_out": str(tmp / "hint_notes.json"), "seg_dir": str(tmp / "segs"),
-              "cache_dir": str(p.exec / "cache" / "soulx"), "fp16": True, "style": "straight", "vibrato": 0}
-        ctx.run([p.exec_py, workers / "executor_worker.py", _job(tmp, "hint", hj)], cwd=p.exec_src,
-                env=E.exec_env(), what="Подсказка звучания")
+        # 2. подсказка нужного звучания: английский — SoulX-Singer поёт помеченные слова (с соседями) в их времени
+        #    и высоте; русский (SoulX его не знает) — Piper произносит, слово растягивается на своё время
+        if plan["language"] == "ru" or hint == "piper":
+            if not E.piper_ready():
+                ctx.span(0.25, 0.4, "Piper — первая установка…")
+                E.install_piper(ctx)
+            ctx.span(0.4, 0.55, "Подсказка звучания (Piper)…")
+            pj = {"step": "piper", "plan": str(tmp / "plan.json"), "voice": str(p.exec_piper_voice),
+                  "out_wav": str(tmp / "hint.wav"), "align_model_dir": str(p.exec / "align")}
+            ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "piper", pj)], env=E.exec_env(),
+                    what="Подсказка звучания")
+        else:
+            _soulx_hint(ctx, tmp, p, workers)
         # 3. звук для содержания + окна перепевки
         ctx.span(0.55, 0.62, "Содержание для перепевки…")
         cj = {"step": "content", "input": str(source), "hint_wav": str(tmp / "hint.wav"), "plan": str(tmp / "plan.json"),

@@ -105,6 +105,10 @@ def _tmp(tag):
 
 
 E.new_tmp = _tmp
+E.piper_ready = lambda: True
+_P = E.paths()
+_P.exec_piper_voice = W / "piper" / "ru_RU-irina-medium.onnx"
+E.paths = lambda: _P
 ctx = E.Ctx()
 k0 = LYR.index("wish")
 print("== перепевка с текстом (пометка «wish»)")
@@ -158,9 +162,79 @@ for name, f in (("dirty", OUT / "take_dirty.wav"), ("fixed", OUT / "fixed.wav"),
     wd = json.load(open(OUT / f"_plan_{name}.json"))["words"][1]
     RES[f"wish_{name}"] = {"t0": wd["t0"], "t1": wd["t1"], "score": wd["score"], "suspect": wd["suspect"]}
 
+okA = (RES["outside_identical"] and RES["mfcc_fixed_vs_clean"] < RES["mfcc_dirty_vs_clean"]
+       and abs(RES["level_dB"]["fixed"] - RES["level_dB"]["clean"]) < abs(RES["level_dB"]["dirty"] - RES["level_dB"]["clean"]))
+
+
+def word_at(f, lyrics, wi, lang, tag):
+    run(EXEC_PY, WORK / "textfix_worker.py",
+        {"step": "prepare", "input": str(f), "lyrics": lyrics, "marks": [], "language": lang,
+         "hint_midi": str(OUT / f"_h_{tag}.mid"), "plan_out": str(OUT / f"_plan_{tag}.json"),
+         "rmvpe": str(W / "applio/rvc/models/predictors/rmvpe.pt"),
+         "rmvpe_py": str(W / "applio/rvc/lib/predictors/RMVPE.py"), "align_model_dir": str(W / "exec" / "align")})
+    wd = json.load(open(OUT / f"_plan_{tag}.json"))["words"][wi]
+    return {"t0": wd["t0"], "t1": wd["t1"], "score": wd["score"], "suspect": wd["suspect"]}
+
+
+def outside_same(fa, fb, changed):
+    a_, asr = sf.read(fa, dtype="float64", always_2d=True)
+    b_, _ = sf.read(fb, dtype="float64", always_2d=True)
+    m = min(len(a_), len(b_))
+    tt = np.arange(m) / asr
+    ins = np.zeros(m, bool)
+    for c0, c1 in changed:
+        ins |= (tt >= c0) & (tt <= c1)
+    return bool(np.array_equal(a_[:m][~ins], b_[:m][~ins]))
+
+
+# ---- Б. замена слова с другим числом слогов: «wish» → «never» (чистый исходник)
+print("== замена слова: «wish» → «never»")
+rB = TF.revoice_text(ctx, OUT / "clean.wav", OUT / "take_clean.wav", item, LYR,
+                     [{"from": k0, "to": k0 + 4, "replace": "never"}], OUT / "replaced.wav")
+LYR_B = LYR.replace("wish", "never", 1)
+RES["B_outside_identical"] = outside_same(OUT / "replaced.wav", OUT / "take_clean.wav", rB["changed"])
+RES["B_never_on_take"] = word_at(OUT / "take_clean.wav", LYR_B, 1, "en", "B_take")
+RES["B_never_on_replaced"] = word_at(OUT / "replaced.wav", LYR_B, 1, "en", "B_rep")
+okB = RES["B_outside_identical"] and (RES["B_never_on_replaced"]["score"] or 0) > (RES["B_never_on_take"]["score"] or 0)
+
+# ---- В. русский: исходник — речь Piper (голос dmitri), подсказка — Piper (irina); «съедено» слово «чудное»
+okC = True
+if (W / "piper" / "ru_RU-dmitri-medium.onnx").exists():
+    print("== русский: «чудное»")
+    LYR_RU = "Я помню чудное мгновенье\nпередо мной явилась ты"
+    run(EXEC_PY, REPO / "tests/textfix/piper_say.py",
+        {"voice": str(W / "piper/ru_RU-dmitri-medium.onnx"), "text": LYR_RU.replace("\n", ", "), "out": str(OUT / "ru_clean.wav")})
+    wc = word_at(OUT / "ru_clean.wav", LYR_RU, 2, "ru", "C_src")
+    xr, srr = sf.read(OUT / "ru_clean.wav", dtype="float64")
+    a, b = int((wc["t0"] + 0.03) * srr), int((wc["t1"] - 0.03) * srr)
+    dr = xr.copy()
+    dr[a:b] = rng.standard_normal(b - a) * 10 ** (-45 / 20)
+    sf.write(OUT / "ru_dirty.wav", dr.astype(np.float32), srr, subtype="FLOAT")
+    run(APPLIO_PY, WORK / "applio_worker.py",
+        {"items": [dict(item, input=str(OUT / "ru_dirty.wav"), output=str(OUT / "ru_take_dirty.wav")),
+                   dict(item, input=str(OUT / "ru_clean.wav"), output=str(OUT / "ru_take_clean.wav"))]}, cwd=str(W / "applio"))
+    k1 = LYR_RU.index("чудное")
+    rC = TF.revoice_text(ctx, OUT / "ru_dirty.wav", OUT / "ru_take_dirty.wav", item, LYR_RU,
+                         [{"from": k1, "to": k1 + 6}], OUT / "ru_fixed.wav")
+    RES["C_plan"] = [{k: q.get(k) for k in ("found", "where", "t0", "t1", "text")} for q in rC["plan"]]
+    RES["C_outside_identical"] = outside_same(OUT / "ru_fixed.wav", OUT / "ru_take_dirty.wav", rC["changed"])
+    for name in ("take_dirty", "fixed", "take_clean"):
+        RES[f"C_word_{name}"] = word_at(OUT / f"ru_{name}.wav", LYR_RU, 2, "ru", f"C_{name}")
+    yd2, ysr2 = sf.read(OUT / "ru_take_dirty.wav", dtype="float64", always_2d=True)
+    yc2, _ = sf.read(OUT / "ru_take_clean.wav", dtype="float64", always_2d=True)
+    yf2, _ = sf.read(OUT / "ru_fixed.wav", dtype="float64", always_2d=True)
+    s2, e2 = int(wc["t0"] * ysr2), int(wc["t1"] * ysr2)
+    lv = lambda v: round(float(20 * np.log10(np.sqrt(np.mean(v[s2:e2, 0] ** 2)) + 1e-9)), 1)  # noqa: E731
+    RES["C_level_dB"] = {"clean": lv(yc2), "dirty": lv(yd2), "fixed": lv(yf2)}
+    okC = (RES["C_outside_identical"]
+           and (RES["C_word_fixed"]["score"] or 0) > (RES["C_word_take_dirty"]["score"] or 0)
+           and abs(RES["C_level_dB"]["fixed"] - RES["C_level_dB"]["clean"]) < abs(RES["C_level_dB"]["dirty"] - RES["C_level_dB"]["clean"]))
+else:
+    print("== русский: Piper не установлен — пропуск")
+
+RES["ok"] = {"A_eaten_en": okA, "B_replace_en": okB, "C_eaten_ru": okC}
 print("== ИТОГ", json.dumps(RES, ensure_ascii=False, indent=1))
-ok = (RES["outside_identical"] and RES["mfcc_fixed_vs_clean"] < RES["mfcc_dirty_vs_clean"]
-      and abs(RES["level_dB"]["fixed"] - RES["level_dB"]["clean"]) < abs(RES["level_dB"]["dirty"] - RES["level_dB"]["clean"]))
+ok = okA and okB and okC
 json.dump(RES, open(OUT / "result.json", "w"), ensure_ascii=False, indent=1)
 print("ПРОВЕРКА:", "OK" if ok else "НЕ ПРОШЛА")
 sys.exit(0 if ok else 1)
