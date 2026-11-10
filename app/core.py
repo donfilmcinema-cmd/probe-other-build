@@ -43,7 +43,7 @@ import songs as S
 import voices as V
 
 API_VERSION = 2                       # 1 и 2 (sing v2: params/styles/curves/range); старше — «обновите»
-ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe")
+ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe", "text_analyze", "revoice_text")
 
 
 def _progress_writer(path):
@@ -112,6 +112,42 @@ def process(ctx, req):
                          req.get("detail") or "notes", req.get("midi_out"))
         r["files"] = [{"role": "midi", "path": r.pop("midi")}]
         return r
+    if action == "text_analyze":
+        # Перепевка с текстом — разбор: {"input": исходник, "lyrics": "...", "marks": [{from, to, replace?}], "language"}
+        # → где каждое слово текста в записи, подозрительные слова (suspect), где найдены пометки (plan)
+        import textfix as TF
+        r = TF.analyze(ctx, req.get("input") or "", req.get("lyrics") or "", req.get("marks"), req.get("language") or "auto")
+        return {"words": r["words"], "plan": r["plan"], "language": r["language"], "seconds": r["seconds"]}
+    if action == "revoice_text":
+        # Перепевка с текстом — исправление: {"input": исходник, "take": готовый дубль (результат convert),
+        #  "voice": "<код голоса>", "convert": {...как в convert...}, "lyrics": "...", "marks": [...], "output": WAV}
+        import textfix as TF
+        voice = req.get("voice")
+        if not voice:
+            raise E.EngineError("В запросе не указан голос (voice).")
+        src, take = Path(req.get("input") or ""), Path(req.get("take") or "")
+        for f, what in ((src, "исходник (input)"), (take, "дубль (take)")):
+            if not f.is_file():
+                raise E.EngineError(f"Не найден {what}: {f}")
+        model, index = V.model_files(voice)
+        o = dict(S.CONVERT_DEFAULTS)
+        o.update({k: v for k, v in (req.get("convert") or {}).items() if k in S.CONVERT_DEFAULTS})
+        item = {k: o[k] for k in o if k != "match_level"}
+        item.update(model=str(model), index=str(index or ""))
+        out = Path(req.get("output") or "")
+        if not req.get("output"):
+            import revoicer as R
+            out = R.next_name(take)
+        tmp = E.new_tmp("rt")
+        try:
+            src16 = tmp / "src.wav"
+            A.to_wav(src, src16, mono=True)
+            r = TF.revoice_text(ctx, src16, take, item, req.get("lyrics") or "", req.get("marks") or [], out,
+                                req.get("language") or "auto")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        return {"files": [{"role": "dzod_lead", "path": r["file"], "voice": voice}], "plan": r["plan"],
+                "changed": r["changed"], "seconds": r["seconds"]}
     if action == "sing":
         # DZOD Executor (E1): {"midi": "...mid", "voice": "<код голоса>", "convert": {...}, "output_dir": "..."}
         import executor as X

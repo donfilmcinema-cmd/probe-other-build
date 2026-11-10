@@ -24,6 +24,7 @@ APP = REPO / "app"
 WORK = REPO / "app" / "workers"
 OUT = W / "out"
 OUT.mkdir(exist_ok=True)
+(OUT / "segs").mkdir(exist_ok=True)
 os.environ["NLTK_DATA"] = str(W / "nltk_data")
 sys.path.insert(0, str(APP))
 

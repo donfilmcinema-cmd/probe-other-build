@@ -249,6 +249,10 @@ def run(log=print):
         check("Executor: модуль и рабочие файлы в программе",
               (E.WORKERS_SRC / "executor_worker.py").exists() and (E.WORKERS_SRC / "exec_score.py").exists())
         check("Executor: без установки — «не установлен»", not E.executor_status()["ready"])
+        import textfix  # noqa: F401
+        import core as C
+        check("Перепевка с текстом: модуль, рабочий файл и действия запроса на месте",
+              (E.WORKERS_SRC / "textfix_worker.py").exists() and "revoice_text" in C.ACTIONS and "text_analyze" in C.ACTIONS)
 
         # --- состояние движка (он здесь не установлен)
         es = E.engine_status()
