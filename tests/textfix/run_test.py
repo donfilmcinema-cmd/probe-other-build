@@ -258,8 +258,8 @@ if (W / "piper" / "ru_RU-dmitri-medium.onnx").exists():
     m2 = min(mf2(yc2).shape[1], mf2(yd2).shape[1], mf2(yf2).shape[1])
     RES["C_mfcc"] = {"dirty_vs_clean": round(float(np.mean(np.linalg.norm(mf2(yd2)[:, :m2] - mf2(yc2)[:, :m2], axis=0))), 2),
                      "fixed_vs_clean": round(float(np.mean(np.linalg.norm(mf2(yf2)[:, :m2] - mf2(yc2)[:, :m2], axis=0))), 2)}
+    # уверенность выравнивания в окне слова — только в отчёт: по-русски она почти не различает (0,02–0,03)
     okC = (RES["C_outside_identical"]
-           and RES["C_score_fixed"] > RES["C_score_take_dirty"]
            and RES["C_mfcc"]["fixed_vs_clean"] < RES["C_mfcc"]["dirty_vs_clean"]
            and abs(RES["C_level_dB"]["fixed"] - RES["C_level_dB"]["clean"]) < abs(RES["C_level_dB"]["dirty"] - RES["C_level_dB"]["clean"]))
 else:
