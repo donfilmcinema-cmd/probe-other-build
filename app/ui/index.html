@@ -360,6 +360,7 @@
             <button data-v="stem" class="on" title="Только голос, без музыки — стем вокала из Suno">Вокальный стем</button>
             <button data-v="mix" title="Песня целиком: сначала нужно выделить из неё голос">Полный трек</button>
           </div>
+          <button class="v7-btn sm danger" id="src-del" title="Открыли не тот файл? Убрать эту песню из программы (ваш исходный файл не трогается)">✕ Убрать</button>
         </h5>
         <div id="src-track"></div>
       </div>
@@ -404,7 +405,8 @@
           <h5><b>3</b>Перепевка<i></i><em id="p-state"></em></h5>
           <div class="v7-fld" id="v-voice-row"><span id="v-voice-k">Голос</span>
             <div class="v7-rowin"><select id="v-voice" class="v7-sel"></select>
-              <button class="v7-btn sm" id="v-load-folder" title="Папка вокалиста: модель .pth, индекс .index (и voice.json). Её делает DZOD Vocalist кнопкой «Сохранить вокалиста в папку…»">+ Папка</button></div></div>
+              <button class="v7-btn sm" id="v-load-folder" title="Папка вокалиста: модель .pth, индекс .index (и voice.json). Её делает DZOD Vocalist кнопкой «Сохранить вокалиста в папку…»">+ Папка</button>
+              <button class="v7-btn sm danger" id="v-remove" title="Убрать выбранного вокалиста из списка (например, загруженного по ошибке). Ваша папка с моделью не трогается">✕</button></div></div>
           <div class="v7-fld"><span>Пресет</span><select id="v-preset-sel" class="v7-sel"></select></div>
           <div id="sliders" class="v7-sliders"></div>
           <div class="v7-row">
@@ -472,7 +474,8 @@
   <div class="jb-prog"><div id="jb-fill"></div></div>
   <span class="mono small dim" id="jb-time"></span>
   <button class="btn sm" id="jb-stop">Остановить</button>
-  <button class="btn sm" id="jb-close" hidden>OK</button>
+  <button class="btn sm primary" id="jb-insert" hidden title="Новый дубль — новой Line под исходной в DZOD Studio">В Studio</button>
+  <button class="btn sm" id="jb-close" hidden title="Убрать эту строку (дубль остаётся в списке «Дубли»)">Закрыть</button>
 </footer>
 
 <div id="modal" hidden>

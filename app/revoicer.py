@@ -21,7 +21,8 @@ Studio (кнопка DZOD Revoicer в Block Vocals) запускает:
 затем пишется ответ и окно закрывается:
     {"ok": true, "files": [{"role": "dzod_lead", "path": "D:\\...\\RIGOR 04 Vocal_Resinger01.wav"}],
      "voice": "Голос 1", "studio": {...как в запросе...}}
-Закрыли окно без вставки: {"ok": false, "cancelled": true, "studio": {...}}.
+Закрыли окно без вставки: есть дубль — {"ok": true, "confirmed": false, "files": [...]} (последний или ★ лучший,
+уже лежит рядом с исходником); дублей нет — {"ok": false, "cancelled": true, "studio": {...}}.
 Результат — той же частоты и ровно той же длины, что input: Slice ставится на ту же позицию, задержка 0."""
 import json
 import os
@@ -96,6 +97,27 @@ def write_result(path, obj):
     os.replace(tmp, p)
 
 
+def _lyrics_for_line(req):
+    """Текст песни из прошлых окон той же Line (тот же исходный файл или та же Line в том же Space)."""
+    st = req.get("studio") or {}
+    best, when = "", 0.0
+    for d in E.songs_dir().iterdir():
+        f = d / "song.json"
+        if not f.exists():
+            continue
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        ms = m.get("studio") or {}
+        same = ms.get("source_file") == req.get("source_file") or (
+            st.get("line") and (ms.get("info") or {}).get("line") == st.get("line")
+            and (ms.get("info") or {}).get("space") == st.get("space"))
+        if same and m.get("lyrics") and (ms.get("opened") or 0) > when:
+            best, when = m["lyrics"], ms.get("opened") or 0
+    return best
+
+
 class Session:
     """Окно, открытое из DZOD Studio: один исходник, ответ — один раз."""
 
@@ -105,6 +127,8 @@ class Session:
         song = S.create(req["input"], "stem", name=Path(req["source_file"]).stem)
         song.m["studio"] = {"source_file": req["source_file"], "info": req.get("studio") or {},
                             "opened": time.time()}
+        # текст песни — с Line: из запроса Studio ("lyrics") или из прошлого окна той же Line
+        song.m["lyrics"] = req.get("lyrics") or _lyrics_for_line(req) or ""
         song.save()
         self.song_id = song.id
 
@@ -128,6 +152,25 @@ class Session:
         return {"path": str(dst), "name": dst.name}
 
     def cancel(self):
-        if not self.answered:
-            write_result(self.req["result"], {"ok": False, "cancelled": True, "studio": self.req.get("studio") or {}})
-            self.answered = True
+        """Окно закрыли без «В Studio». Если дубль есть — готовая работа не теряется: последний (или ★ лучший)
+        дубль кладётся рядом с исходником (…_ResingerNN.wav) и передаётся Studio с пометкой confirmed: false —
+        Studio может предложить вставить его. Дублей нет — «cancelled», как раньше."""
+        if self.answered:
+            return
+        res = {"ok": False, "cancelled": True, "studio": self.req.get("studio") or {}}
+        try:
+            s = S.get(self.song_id)
+            takes = s.m.get("takes", [])
+            best = next((t for t in takes if t["id"] == s.m.get("best")), None)
+            t = best or (max(takes, key=lambda x: x.get("made", 0)) if takes else None)
+            if t:
+                done = [x for x in t.get("placed", []) if Path(x).exists()]
+                dst = Path(done[-1]) if done else place(self.song_id, t["id"])[0]
+                res = {"ok": True, "confirmed": False, "files": [{"role": "dzod_lead", "path": str(dst)}],
+                       "voice": t.get("voice_name"), "opts": t.get("opts"), "takes": len(takes),
+                       "studio": self.req.get("studio") or {}}
+                E.log(f"ОКНО ЗАКРЫТО БЕЗ «В STUDIO»: последний дубль передан Studio без подтверждения — {dst}")
+        except Exception as ex:  # noqa: BLE001 — ответ Studio важнее: пишем хотя бы «cancelled»
+            E.log(f"ОКНО ЗАКРЫТО: не удалось положить дубль ({ex}) — ответ «cancelled»")
+        write_result(self.req["result"], res)
+        self.answered = True

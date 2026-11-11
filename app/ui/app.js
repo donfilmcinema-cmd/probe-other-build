@@ -593,7 +593,7 @@ function renderTakes() {
       if (r) { S.song = r; renderTakes(); }
     };
     const acts = row.querySelector('.acts');
-    if (!(S.info && S.info.flavor === 'revoicer')) {
+    {
       const tx = el('<button class="v7-btn sm" title="Перепевка с текстом: исправить съеденные звуки и слова или заменить слово — только в помеченных местах">Текст</button>');
       tx.onclick = () => openText(t);
       acts.appendChild(tx);
@@ -638,6 +638,24 @@ Player.on(st => {
   if (st.id && st.id.startsWith('take_')) $('takes-ab').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.s === st.side));
 });
 
+
+$('src-del').onclick = () => $('song-del').click();
+/* шаг «Песня», карточка 3: убрать выбранного вокалиста из списка (загруженного по ошибке).
+   Удаляется только копия в папке программы; исходная папка автора не трогается.
+   Голос с фразами датасета (обучался здесь) отсюда не удаляется — только на шаге «Голос». */
+$('v-remove').onclick = async () => {
+  const slug = $('v-voice').value;
+  const v = (S.voices || []).find(x => x.slug === slug);
+  if (!v) { toast('Вокалист не выбран.', true); return; }
+  if (v.stats && v.stats.phrases > 0) {
+    await modal({ title: `«${v.name}» — голос с датасетом`, text: 'У этого голоса есть фразы и обучение. Удалить его можно на шаге «Голос» → «Удалить…».', ok: 'Понятно', cancel: false });
+    return;
+  }
+  const where = v.from_folder ? `\nПапка, из которой он загружен, останется на месте:\n${v.from_folder}` : '';
+  if (!(await modal({ title: `Убрать «${v.name}» из списка?`, text: 'Вокалист пропадёт из выбора. Готовые дубли этим голосом останутся.' + where, ok: 'Убрать' }))) return;
+  const r = await safe(() => api('voice_delete', { slug, with_training: false }));
+  if (r) { toast(`«${v.name}» убран из списка.`); await loadVoices(); }
+};
 /* ================================================================= ТЕКСТ (перепевка с текстом) */
 // Слова текста с позициями — как words_pos в движке (textfix): метки [Verse], {Bridge}, (x2) не поются
 function txWords(lyrics) {
@@ -669,6 +687,20 @@ function openText(t) {
            result: null, sel: -1 };
   $('text-over').hidden = false;
   renderText();
+  api('exec_status').then(st => { if (S.tx) { S.tx.execReady = !!st.ready; txExecNote(); } }).catch(() => {});
+}
+// «Текст» требует Executor (выравнивание текста + подсказка SoulX). Не установлен — предложить здесь же
+function txExecNote() {
+  const T = S.tx;
+  if (!T || T.execReady !== false) return;
+  $('tx-note').innerHTML = 'Для «Текста» нужен <b>Executor</b> — выравнивание текста и подсказка звучания (~6 ГБ, ставится один раз). ' +
+    '<button class="v7-btn sm go" id="tx-exec-inst">Установить</button>';
+  $('tx-exec-inst').onclick = async () => {
+    if (!(await needEngine())) return;
+    await startJob(() => api('exec_install'));
+    const st = await safe(() => api('exec_status'));
+    if (S.tx && st) { S.tx.execReady = !!st.ready; $('tx-note').textContent = st.ready ? 'Executor готов — можно искать слова и исправлять.' : ''; txExecNote(); }
+  };
 }
 function closeText() { $('text-over').hidden = true; S.tx = null; Player.stop(); }
 
@@ -686,10 +718,10 @@ function renderText() {
       <div class="v7-card"><h5><b>1</b>Текст песни<i></i>
         <div class="v7-seg" id="tx-mode"><button data-v="mark">Пометки</button><button data-v="edit">Правка текста</button></div></h5>
         <div id="tx-body" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
-        <div class="tx-legend"><span><i style="background:rgba(227,163,94,.85)"></i>исправить (съедено)</span>
-          <span><i style="background:rgba(166,120,228,.85)"></i>заменить слово</span>
+        <div class="tx-legend"><span><i style="background:rgba(227,163,94,.85)"></i>съедено</span>
+          <span><i style="background:rgba(166,120,228,.85)"></i>замена</span>
           <span><i class="sus-i">〰</i>возможно, съедено</span>
-          <span><i style="background:#3a3c42"></i>не найдено в записи</span></div>
+          <span><i style="background:#3a3c42"></i>не найдено</span></div>
       </div>
       <div class="v7-card"><h5><b>2</b>Пометки<i></i><em id="tx-cnt"></em></h5><div class="tx-marks" id="tx-marks"></div></div>
     </div>
@@ -742,6 +774,7 @@ function renderText() {
     body.appendChild(box);
   }
   renderTextMarks();
+  txExecNote();
 }
 function txSyncEdit() {
   const ta = $('tx-edit');
@@ -1522,7 +1555,18 @@ function renderJob() {
   $('jb-stop').textContent = j.stopping ? 'Останавливаю…' : 'Остановить';
   $('jb-stop').hidden = j.state !== 'running';
   $('jb-close').hidden = j.state === 'running';
+  // из Studio: готовый дубль — сразу «В Studio» здесь, чтобы не искать кнопку в строке дубля
+  const made = j.state === 'done' && j.kind === 'convert' && S.info && S.info.studio && !S.inserted && j.result && (j.result.made || [])[0];
+  $('jb-insert').hidden = !made;
+  $('jb-insert').dataset.take = made || '';
+  if (made) $('jb-msg').textContent = 'готово — дубль в списке. «В Studio» — вставить его новой Line под исходной';
 }
+$('jb-insert').onclick = async () => {
+  const take = $('jb-insert').dataset.take;
+  if (!take) return;
+  const r = await safe(() => api('studio_insert', { take }));
+  if (r) { S.inserted = true; toast('Вставлено в DZOD Studio: ' + r.name + '. Окно закрывается…'); document.querySelectorAll('.insert').forEach(x => x.disabled = true); $('jb-insert').hidden = true; }
+};
 $('jb-stop').onclick = async () => {
   const j = S.job;
   const train = j && j.kind === 'train';
@@ -1815,12 +1859,13 @@ function applyFlavor() {
     $('v-cards').className = 'rv-voices';
     // 0.7: «+ Папка» у поля Вокалист — загрузка вокалиста (макет DESIGN)
     $('v-voice-k').textContent = 'Вокалист';
-    document.querySelector('.v7-takes-f .v7-note').textContent = '★ — лучший дубль · A/B — исходник и дубль на лету';
+    
     document.querySelector('#song-empty .lead').textContent = 'Перепевка вокала вашим вокалистом DZOD. Вокалиста делает DZOD Vocalist; сюда его загружают папкой.';
   }
   if (st) {
     $('song-side').hidden = true;
-    document.querySelector('[data-pop="pop-files"]').hidden = true;     // путь виден в плашке и у дубля (DESIGN)
+    document.querySelector('[data-pop="pop-files"]').hidden = true;
+    $('src-del').hidden = true;     // исходник из Studio — его не убирают     // путь виден в плашке и у дубля (DESIGN)
     $('studio-banner').hidden = false;
     $('studio-k').textContent = 'FROM DZOD STUDIO' + (st.space ? ' · ' + st.space : '') + ' · VOCALS';
     $('studio-line').textContent = st.line || 'Line';
