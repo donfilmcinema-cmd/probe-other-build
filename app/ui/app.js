@@ -1643,6 +1643,7 @@ async function loadExec() {
   $('ex-pill').textContent = st.ready ? 'установлен' : 'не установлен';
   $('ex-pill').className = 'state-pill ' + (st.ready ? 'ok' : '');
   $('ex-install-card').hidden = !!st.ready;
+  if (st.shared) $('ex-pill').title = 'Executor общий со второй программой: ' + st.dir;
   $('ex-notes-card').hidden = $('ex-work').hidden = !st.ready;   // до установки — только карточка установки
   $('ex-install').textContent = st.ready ? 'Executor готов' : (st.steps.some(x => x.done) ? 'Продолжить установку' : 'Установить Executor');
   $('ex-install').disabled = st.ready || running || !(S.info && S.info.engine && S.info.engine.ready);
@@ -1881,7 +1882,7 @@ function applyFlavor() {
 function renderStatus() {
   const i = S.info || {}, e = i.engine || {}, g = e.gpu;
   $('st-led').className = 'led ' + (e.ready ? 'ok' : 'no');
-  $('st-eng').innerHTML = (e.ready ? 'Движок готов' : 'Движок не установлен') +
+  $('st-eng').innerHTML = (e.ready ? (e.shared ? 'Движок готов (общий с DZOD Vocalist)' : 'Движок готов') : 'Движок не установлен') +
     (g && g.cuda ? ` · <b>${esc(g.name.replace(/^NVIDIA (GeForce )?/, ''))}</b> · ${num(g.vram_gb, 1)} ГБ` : '');
   $('st-dest').textContent = i.studio ? 'Результат — новой Line под исходной в DZOD Studio' :
     (i.flavor === 'revoicer' ? 'Результат — рядом с исходником, …_ResingerNN.wav' : 'Результат — новой Line в Block Vocals DZOD Studio');

@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -176,11 +176,59 @@ def voices_dir():
 
 # ---------------------------------------------------------------- пути движка
 
-class Paths:
-    """Где лежит движок. Для разработки на Linux пути можно подменить переменными DZOD_*."""
+def other_root():
+    """Папка второй программы (DZOD Vocalist ↔ DZOD Revoicer): из её настроек, иначе — её папка по умолчанию."""
+    other_app = "DZOD Vocalist" if REVOICER else "DZOD Revoicer"
+    other_name = "DZOD_Vocalist" if REVOICER else "DZOD_Revoicer"
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".local" / "share")
+    r = None
+    try:
+        r = json.loads((Path(base) / other_app / "settings.json").read_text(encoding="utf-8")).get("root")
+    except Exception:  # noqa: BLE001
+        pass
+    if not r:
+        r = default_root().replace(ROOT_NAME, other_name)
+    return Path(r)
 
-    def __init__(self):
-        e = root() / "Engine"
+
+def _engine_ready_in(e):
+    """Основной движок установлен в папке e (метки шагов + Python сред Applio и чистки)."""
+    q = Paths(e)
+    return all((e / f".done_{s}").exists() for s, _n, _w in STEPS) and q.applio_py.exists() and q.sep_py.exists()
+
+
+def _exec_ready_in(e):
+    """Executor установлен в движке e."""
+    q = Paths(e)
+    return all((e / f".done_{s}").exists() for s, _n, _w in EXEC_STEPS) and q.exec_py.exists() and q.exec_model.exists()
+
+
+def _sharing():
+    return not (os.environ.get("DZOD_ROOT") or os.environ.get("DZOD_NO_SHARE"))
+
+
+class Paths:
+    """Где лежит движок. Для разработки на Linux пути можно подменить переменными DZOD_*.
+
+    Общий движок (11.11, автор: «нельзя установить один раз для обоих?»): тяжёлые части ставятся один раз на две программы.
+    - Executor (~6 ГБ) — общий в обе стороны: если в своей папке его нет, а у второй программы он готов — берётся оттуда.
+    - Основной движок (~12 ГБ) — Revoicer берёт движок Vocalist (у Vocalist есть всё, что нужно Revoicer);
+      Vocalist движок Revoicer не берёт: в нём нет файлов для обучения голоса.
+    Песни, голоса, временные файлы и рабочие скрипты — у каждой программы свои."""
+
+    def __init__(self, engine_dir=None):
+        own = root() / "Engine"
+        e = Path(engine_dir) if engine_dir else own
+        self.shared_engine = None
+        self.shared_exec = None
+        if engine_dir is None and _sharing():
+            try:
+                oe = other_root() / "Engine"
+                if REVOICER and oe != own and not _engine_ready_in(own) and _engine_ready_in(oe):
+                    e = oe
+                    self.shared_engine = str(oe)
+            except Exception:  # noqa: BLE001 — нет доступа к папке второй программы: работаем со своей
+                pass
         self.engine = e
         self.uv = Path(os.environ.get("DZOD_UV") or (e / "uv" / ("uv.exe" if IS_WIN else "uv")))
         self.uv_cache = e / "uv-cache"
@@ -190,8 +238,15 @@ class Paths:
         self.sep = e / "Sep"
         self.sep_env = self.sep / "env"
         self.sep_models = Path(os.environ.get("DZOD_SEP_MODELS") or (self.sep / "models"))
-        self.workers = e / "workers"
         self.exec = e / "Executor"
+        if engine_dir is None and _sharing():
+            try:
+                oe = other_root() / "Engine"
+                if oe != e and not _exec_ready_in(e) and _exec_ready_in(oe):
+                    self.exec = oe / "Executor"
+                    self.shared_exec = str(oe)
+            except Exception:  # noqa: BLE001
+                pass
         self.exec_src = self.exec / "SoulX-Singer"
         self.exec_env = self.exec / "env"
         self.exec_model = self.exec / "models" / "model.pt"
@@ -200,7 +255,8 @@ class Paths:
         self.exec_prompt_meta = self.exec / "prompt" / "en_prompt.json"
         self.exec_piper = self.exec / "piper"
         self.exec_piper_voice = self.exec_piper / f"{PIPER_VOICE}.onnx"
-        self.tmp = e / "tmp"
+        self.tmp = own / "tmp"                 # временные файлы и рабочие скрипты — всегда свои
+        self.workers = own / "workers"
         self.status = e / "status.json"
 
     @staticmethod
@@ -531,7 +587,10 @@ STEPS = [
 
 
 def marker(name):
-    return paths().engine / f".done_{name}"
+    p = paths()
+    if name.startswith("exec"):             # метки Executor — в движке, где лежит Executor (может быть общий)
+        return p.exec.parent / f".done_{name}"
+    return p.engine / f".done_{name}"
 
 
 def engine_status():
@@ -551,6 +610,7 @@ def engine_status():
         "engine": str(p.engine), "ready": ready, "steps": steps,
         "gpu": st.get("gpu"), "free_gb": disk_free_gb(root()),
         "applio": applio_ok, "sep": sep_ok,
+        "shared": p.shared_engine,          # движок второй программы (общий), иначе None
     }
 
 
@@ -743,7 +803,7 @@ def executor_status():
     p = paths()
     steps = [{"id": s, "name": n, "done": marker(s).exists()} for s, n, _ in EXEC_STEPS]
     ready = all(x["done"] for x in steps) and p.exec_py.exists() and p.exec_model.exists()
-    return {"ready": ready, "steps": steps, "dir": str(p.exec)}
+    return {"ready": ready, "steps": steps, "dir": str(p.exec), "shared": p.shared_exec}
 
 
 def install_executor(ctx):
