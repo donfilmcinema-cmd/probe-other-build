@@ -114,10 +114,12 @@ def to_wav(src, dst, mono=False, sr=None):
     return dst
 
 
-def peaks(path, n=1200):
-    """Волна для экрана: n пар (минимум, максимум) по всему файлу."""
+def peaks(path, n=1200, t0=None, t1=None):
+    """Волна для экрана: n пар (минимум, максимум) по всему файлу или по отрезку [t0, t1] с."""
     x, sr = read(path, mono=True)
     m = x[:, 0]
+    if t0 is not None and t1 is not None and t1 > t0:
+        m = m[max(0, int(t0 * sr)):max(0, int(t1 * sr))]
     n = int(max(50, min(4000, n)))
     if len(m) == 0:
         return {"min": [0] * n, "max": [0] * n, "seconds": 0}

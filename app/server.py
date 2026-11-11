@@ -200,6 +200,8 @@ class App:
             p = b.get("path", "")
             if not self.allowed(p):
                 raise E.EngineError("Файл недоступен.")
+            if b.get("t0") is not None and b.get("t1") is not None:
+                return A.peaks(p, int(b.get("n", 1200)), float(b["t0"]), float(b["t1"]))
             return A.peaks(p, int(b.get("n", 1200)))
         if name == "log_tail":
             try:
@@ -278,6 +280,19 @@ class App:
             what = tuple(b.get("what") or ("lead",))
             return self.start_job("convert", "Перепевка",
                                   lambda ctx: S.convert(ctx, b["id"], b["voice"], b.get("opts"), what))
+        if name == "song_best":
+            return S.set_best(b["id"], b["take"])
+        if name == "song_lyrics":
+            return S.save_lyrics(b["id"], b.get("lyrics", ""))
+        if name == "text_analyze":
+            # перепевка с текстом: где слова текста в исходнике дубля, подозрительные, где пометки
+            return self.start_job("text", "Текст по записи",
+                                  lambda ctx: S.text_analyze(ctx, b["id"], b["take"], b.get("lyrics"), b.get("marks"),
+                                                             b.get("language") or "auto"))
+        if name == "text_fix":
+            return self.start_job("text", "Исправление по тексту",
+                                  lambda ctx: S.text_fix(ctx, b["id"], b["take"], b.get("lyrics"), b.get("marks") or [],
+                                                         b.get("language") or "auto"))
         if name == "song_clear":
             return S.clear(b["id"], b.get("what"))
         if name == "take_place":

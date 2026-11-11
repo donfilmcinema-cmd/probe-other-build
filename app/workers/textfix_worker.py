@@ -82,7 +82,11 @@ def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
         hi = words[nxt[0]]["t0"] if nxt else total
         plausible = all(words[k]["t0"] is not None and words[k]["t1"] - words[k]["t0"] >= 0.03 * len(words[k]["text"]) + 0.06
                         for k in wi)
-        if all(reliable(k) for k in wi) or (mk.get("replace") and plausible):
+        if mk.get("t0") is not None and mk.get("t1") is not None and float(mk["t1"]) > float(mk["t0"]):
+            # автор сдвинул границы вручную — его место
+            t0, t1 = float(mk["t0"]), float(mk["t1"])
+            where = "manual"
+        elif all(reliable(k) for k in wi) or (mk.get("replace") and plausible):
             # замена: слово в записи целое — его место верное, даже если уверенность выравнивания низкая
             t0, t1 = words[i0]["t0"], words[i1]["t1"]
             where = "found"
@@ -125,7 +129,7 @@ def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
         # где менять содержание: съедено (провал громкости внутри слова) — только провал ±40 мс, целые края слова
         # остаются родными; провала нет (слово «смазано») и замена слова — всё помеченное место
         win = [[t0, t1]]
-        if not mk.get("replace"):
+        if not mk.get("replace") and where != "manual":
             hs = holes(t0 - 0.05, t1 + 0.05)
             if hs:
                 win = [[max(t0, h0 - 0.04), min(t1, h1 + 0.04)] for h0, h1 in hs]

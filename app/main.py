@@ -66,7 +66,7 @@ def run_window(app, url, smoke_log=None, title=TITLE):
 
     log = file_logger(smoke_log) if smoke_log else (lambda m: None)
     state = {"ready": False}
-    win = webview.create_window(title, url, width=1280, height=860, min_size=(1080, 700),
+    win = webview.create_window(title, url, width=1240, height=820, min_size=(1080, 700),
                                 background_color="#0F1012")
 
     def picker(kind, start_dir, name=""):

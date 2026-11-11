@@ -99,7 +99,8 @@ class Song:
                 "kind": self.m.get("kind", "stem"), "files": files, "takes": takes,
                 "clean_opts": self.m.get("clean_opts"), "updated": self.m.get("updated", 0),
                 "origin": self.m.get("origin"), "origin_exists": bool(self.m.get("origin")) and Path(self.m["origin"]).exists(),
-                "created": self.m.get("created"), "cleaned": self.m.get("cleaned"), "size_mb": round(size / 1e6, 1)}
+                "created": self.m.get("created"), "cleaned": self.m.get("cleaned"), "size_mb": round(size / 1e6, 1),
+                "lyrics": self.m.get("lyrics", ""), "best": self.m.get("best")}
 
 
 def list_songs():
@@ -330,3 +331,80 @@ def delete_preset(name):
     user.pop(name, None)
     E.SETTINGS.set(presets=user)
     return presets()
+
+
+# ---------------------------------------------------------------- перепевка с текстом (исправление дубля)
+def set_best(song_id, take_id):
+    """★ лучший дубль (повторно — снять)."""
+    s = get(song_id)
+    s.m["best"] = None if s.m.get("best") == take_id else take_id
+    s.save()
+    return s.view()
+
+
+def save_lyrics(song_id, lyrics):
+    s = get(song_id)
+    s.m["lyrics"] = lyrics or ""
+    s.save()
+    return {"ok": True}
+
+
+def _take(s, take_id):
+    t = next((t for t in s.m.get("takes", []) if t["id"] == take_id), None)
+    if not t or not (s.dir / t["file"]).exists():
+        raise E.EngineError("Дубль не найден.")
+    src = s.dir / t.get("from", "")
+    if not t.get("from") or not src.exists():
+        raise E.EngineError("Нет исходника этого дубля (файл чистки удалён?) — исправлять не с чем.")
+    return t, src
+
+
+def text_analyze(ctx, song_id, take_id, lyrics, marks=None, language="auto"):
+    """Где каждое слово текста в исходнике дубля, подозрительные слова, где найдены пометки."""
+    import textfix as TF
+    s = get(song_id)
+    if lyrics is not None:
+        s.m["lyrics"] = lyrics
+        s.save()
+    _t, src = _take(s, take_id)
+    tmp = E.new_tmp("tfs")
+    try:
+        inp = tmp / "src.wav"
+        A.to_wav(src, inp, mono=True)
+        return TF.analyze(ctx, inp, s.m.get("lyrics", ""), marks, language)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def text_fix(ctx, song_id, take_id, lyrics, marks, language="auto"):
+    """Исправить дубль по тексту: новый дубль, где изменены только помеченные места."""
+    import textfix as TF
+    import voices as V
+    s = get(song_id)
+    s.m["lyrics"] = lyrics or s.m.get("lyrics", "")
+    s.save()
+    t, src = _take(s, take_id)
+    model, index = V.model_files(t["voice"])
+    o = dict(CONVERT_DEFAULTS)
+    o.update({k: v for k, v in (t.get("opts") or {}).items() if k in CONVERT_DEFAULTS})
+    item = {k: o[k] for k in o if k != "match_level"}
+    item.update(model=str(model), index=str(index or ""))
+    takes = s.m.setdefault("takes", [])
+    num = 1 + max([x.get("num", 0) for x in takes] + [0])
+    fname = f"{Path(t['file']).stem} - текст {num:02d}.wav"
+    tmp = E.new_tmp("tfx")
+    try:
+        inp = tmp / "src.wav"
+        A.to_wav(src, inp, mono=True)
+        r = TF.revoice_text(ctx, inp, s.dir / t["file"], item, s.m["lyrics"], marks, s.dir / fname, language)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    nt = dict(t, id=f"t{int(time.time() * 1000)}fix", num=num, file=fname, made=time.time(),
+              fixed_from=t["id"], fixed_from_num=t.get("num"), text_marks=marks, changed=r.get("changed", []))
+    takes.append(nt)
+    s.save()
+    v = s.view()
+    v["made"] = [nt["id"]]
+    v["text_plan"] = r.get("plan", [])
+    v["changed"] = r.get("changed", [])
+    return v

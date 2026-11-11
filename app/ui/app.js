@@ -274,24 +274,58 @@ function renderSong() {
   cleanStatus();
   cleanDlNote();
   const hasLead = files.some(f => f.role === 'lead'), hasBack = files.some(f => f.role === 'backing');
-  // предложение DESIGN 3: пройденные шаги сворачиваются в строку-итог
-  if (S.expandFor !== s.id) { S.expandFor = s.id; S.expand = {}; }
-  const cleaning = S.job && S.job.state === 'running' && S.job.kind === 'clean';
-  $('sum-src').innerHTML = `<b>✓</b>${s.kind === 'mix' ? 'полный трек' : 'вокальный стем'} · ${esc($('song-info').textContent)}`;
-  $('p-src').classList.toggle('collapsed', (hasLead || (s.takes || []).length > 0) && !S.expand.src);
-  $('p-clean').classList.toggle('collapsed', hasLead && !cleaning && !S.expand.clean);
-  $('sum-clean').innerHTML = '<b>✓</b>' + esc($('clean-when').textContent);
+  syncDereverbToggle();
   $('w-backing').disabled = !hasBack;
   if (!hasBack) $('w-backing').checked = false;
   $('conv-note').textContent = hasLead ? '' : (s.kind === 'mix' ? 'Сначала почистите: из полного трека нужно выделить вокал.' : 'Без чистки перепевается исходник как есть.');
   renderTakes();
 }
-document.querySelectorAll('.p-edit').forEach(b => b.onclick = () => { S.expand[b.dataset.p] = true; $('p-' + b.dataset.p).classList.remove('collapsed'); });
+/* 0.7: «Убрать ревер» — переключатель; способ (UVR / Roformer) — в «Ещё…» */
+S.lastDereverb = 'uvr';
+function syncDereverbToggle() {
+  const d = segVal('c-dereverb');
+  if (d && d !== 'off') S.lastDereverb = d;
+  $('c-dereverb-on').checked = d !== 'off';
+  $('c-dereverb-sub').textContent = d === 'roformer' ? 'Roformer — сильнее' : (d === 'off' ? 'ревер остаётся' : 'как в UVR, сила ' + $('c-aggr').value);
+}
+$('c-dereverb-on').onchange = () => {
+  segSet('c-dereverb', $('c-dereverb-on').checked ? (S.lastDereverb || 'uvr') : 'off');
+  aggrVisible(); cleanDlNote(); rememberClean(); syncDereverbToggle();
+};
+/* 0.7: «Ещё…» и «Файлы…» — панели поверх карточки */
+function closePops(except) { document.querySelectorAll('.v7-pop').forEach(p => { if (p !== except) p.hidden = true; }); }
+document.querySelectorAll('[data-pop]').forEach(b => b.onclick = e => {
+  e.stopPropagation();
+  const p = $(b.dataset.pop);
+  const show = p.hidden;
+  closePops();
+  p.hidden = !show;
+});
+document.querySelectorAll('.v7-pop [data-close]').forEach(b => b.onclick = () => { b.closest('.v7-pop').hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePops(); closeMenus(); } });
+function closeMenus() { document.querySelectorAll('.v7-menu').forEach(m => m.remove()); }
+document.addEventListener('click', e => { if (!e.target.closest('.v7-menu')) closeMenus(); });
+function menu(anchor, items) {
+  closeMenus();
+  const m = el('<div class="v7-menu"></div>');
+  for (const it of items) {
+    if (!it) continue;
+    const b = el(`<button class="${it.danger ? 'danger' : ''}">${esc(it.label)}</button>`);
+    b.onclick = e => { e.stopPropagation(); closeMenus(); it.fn(); };
+    m.appendChild(b);
+  }
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + 'px';
+  const top = r.bottom + 4;
+  m.style.top = (top + m.offsetHeight > window.innerHeight - 8 ? r.top - m.offsetHeight - 4 : top) + 'px';
+  return m;
+}
 function cap1(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
 segBind('song-kind', async v => { const r = await safe(() => api('song_kind', { id: S.song.id, kind: v })); if (r) { S.song = r; renderSong(); } });
-segBind('c-dereverb', () => { aggrVisible(); cleanDlNote(); });
-$('c-aggr').oninput = () => { $('c-aggr-v').textContent = $('c-aggr').value; };
+segBind('c-dereverb', () => { aggrVisible(); cleanDlNote(); syncDereverbToggle(); });
+$('c-aggr').oninput = () => { $('c-aggr-v').textContent = $('c-aggr').value; syncDereverbToggle(); };
 $('c-aggr').onchange = () => rememberClean(); segBind('c-quality', cleanDlNote);
 $('c-backing').onchange = () => { $('c-bsame-w').hidden = !$('c-backing').checked; cleanDlNote(); };
 $('c-denoise').onchange = cleanDlNote;
@@ -409,8 +443,9 @@ function setPresetSel(name) {
   S.presetSel = name;
   document.querySelectorAll('#v-presets button').forEach(b => b.classList.toggle('on', b.dataset.v === name));
   const p = S.presets.find(x => x.name === name);
-  $('p-state').innerHTML = p ? `Выбран пресет <b>${esc(p.name)}</b>. Если сдвинуть настройки ниже — станут «свои настройки».`
-    : 'Сейчас <b>свои настройки</b> — их можно сохранить как пресет.';
+  $('p-state').textContent = p ? 'пресет «' + p.name + '»' : 'свои настройки';
+  const ps = $('v-preset-sel');
+  if (ps) ps.value = p ? name : '__custom';
   $('p-del').disabled = !p || p.builtin;
 }
 function markCustom() {
@@ -438,6 +473,13 @@ async function loadPresets(selectName) {
     };
     box.appendChild(b);
   }
+  const ps = $('v-preset-sel');
+  ps.innerHTML = '<option value="__custom">свои настройки</option>' +
+    S.presets.map(p => `<option value="${esc(p.name)}" title="${esc(p.text || '')}">${esc(p.name)}${p.builtin ? '' : ' ★'}</option>`).join('');
+  ps.onchange = () => {
+    const b = [...box.querySelectorAll('button')].find(x => x.dataset.v === ps.value);
+    if (b) b.click(); else setPresetSel('__custom');
+  };
   setPresetSel(selectName && S.presets.some(p => p.name === selectName) ? selectName : '__custom');
 }
 $('p-save').onclick = async () => {
@@ -527,57 +569,309 @@ function renderTakes() {
   box.innerHTML = '';
   const s = S.song;
   const takes = (s.takes || []).slice().sort((a, b) => b.made - a.made);
-  $('takes-h').hidden = !takes.length;
+  $('p-takes').hidden = !takes.length;
   for (const t of takes) {
     const id = 'take_' + t.id;
     const srcPath = s.dir + '\\' + t.from;
     const srcFile = (s.files.find(f => f.name === t.from) || {}).path || srcPath;
     const part = t.part === 'лид' ? 'вокал' : t.part;
-    const card = el(`<div class="take ${S.newTakes.has(t.id) ? 'new' : ''}">
-      <div class="take-h"><b>№ ${String(t.num).padStart(2, '0')}</b><span>${esc(part)} · ${esc(t.voice_name)}</span>
-        <span class="p">${esc(optsLine(t.opts))}</span><span class="grow"></span></div>
-      <div class="take-f">Файл: <span class="mono">${esc(t.file)}</span> <span class="dim">— в папке результатов песни</span>${(t.placed || []).length ? ` <span class="dim">· рядом с исходником: </span><span class="mono">${esc(t.placed.map(x => x.split(/[\\/]/).pop()).join(', '))}</span>` : ''}</div>
-      <div class="ab"><span></span><span></span><div class="tr-btns"></div></div></div>`);
+    const best = s.best === t.id;
+    const fixed = t.fixed_from_num ? ` · текст по № ${String(t.fixed_from_num).padStart(2, '0')}` : '';
+    const row = el(`<div class="v7-tk ${S.newTakes.has(t.id) ? 'new' : ''} ${best ? 'best' : ''}" title="${esc(t.file)}">
+      <span></span>
+      <div class="nm"><b>Дубль ${String(t.num).padStart(2, '0')} · ${esc(part)}${esc(fixed)}</b><small>${esc(t.voice_name)} · ${esc(optsLine(t.opts))}</small></div>
+      <span></span><em></em>
+      <button class="star ${best ? 'on' : ''}" title="Лучший дубль">★</button>
+      <div class="acts"></div></div>`);
     const v = Math.round(t.made);
-    const wave = waveBox(id, srcFile, t.path, v, '#FF8A1F');
-    const ab = card.querySelector('.ab');
-    ab.replaceChild(wave, ab.children[1]);
-    ab.replaceChild(playBtn(id, srcFile, t.path, v), ab.children[0]);
-    const sw = el(`<div class="abswitch" data-id="${id}" data-side="B"><button data-s="A">Исходник</button><button data-s="B" class="on">DZOD</button></div>`);
-    sw.querySelectorAll('button').forEach(b => b.onclick = async () => {
-      const st = Player.state();
-      if (st.id !== id) { await Player.toggle(id, media(srcFile, v), media(t.path, v), b.dataset.s); return; }
-      Player.setSide(b.dataset.s);
-    });
-    const btns = card.querySelector('.tr-btns');
-    btns.appendChild(sw);
-    const same = el(`<button class="icon-btn" title="Вернуть настройки этого дубля в панель">Настройки</button>`);
-    same.onclick = () => { applyOpts(t.opts); setPresetSel('__custom'); toast('Настройки дубля № ' + t.num + ' возвращены в панель.'); };
-    const show = el(`<button class="icon-btn" title="Показать этот файл в проводнике">Показать</button>`);
-    show.onclick = () => api('open', { path: t.path, select: true });
-    const sv = el(`<button class="icon-btn save" title="Сохранить копию дубля в выбранную папку — например, в папку проекта Samplitude">💾 Сохранить как…</button>`);
-    sv.onclick = () => saveAs(t.path, t.file);
-    const near = el(`<button class="icon-btn save" title="Копия дубля рядом с исходным файлом: ${esc(S.nextName || 'Имя_Resinger01.wav')}">Рядом с исходником</button>`);
-    near.onclick = async () => {
-      const r = await safe(() => api('take_place', { id: s.id, take: t.id }));
-      if (r) { toast('Сохранено рядом с исходником: ' + r.name); S.song = r.song; }
+    const wave = waveBox(id, srcFile, t.path, v, '#e3a35e');
+    row.replaceChild(wave, row.children[2]);
+    row.replaceChild(playBtn(id, srcFile, t.path, v), row.children[0]);
+    peaksOf(t.path, v).then(pk => { row.querySelector('em').textContent = fmtTime(pk.seconds); }).catch(() => {});
+    row.querySelector('.star').onclick = async () => {
+      const r = await safe(() => api('song_best', { id: s.id, take: t.id }));
+      if (r) { S.song = r; renderTakes(); }
     };
-    const del = el(`<button class="icon-btn" title="Удалить дубль">✕</button>`);
-    del.onclick = async () => {
-      if (!(await modal({ title: 'Удалить дубль № ' + t.num + '?', text: t.file, ok: 'Удалить' }))) return;
-      const r = await safe(() => api('take_delete', { id: s.id, take: t.id }));
-      if (r) { S.song = r; renderSong(); }
-    };
+    const acts = row.querySelector('.acts');
+    if (!(S.info && S.info.flavor === 'revoicer')) {
+      const tx = el('<button class="v7-btn sm" title="Перепевка с текстом: исправить съеденные звуки и слова или заменить слово — только в помеченных местах">Текст</button>');
+      tx.onclick = () => openText(t);
+      acts.appendChild(tx);
+    }
     if (S.info && S.info.studio) {
-      const ins = el(`<button class="icon-btn insert" title="Файл ляжет рядом с исходником и встанет новой Line под исходной, с той же позиции">Вставить в Studio</button>`);
+      const ins = el('<button class="v7-btn sm go insert" title="Файл ляжет рядом с исходником и встанет новой Line под исходной, с той же позиции">В Studio</button>');
       ins.onclick = async () => {
         const r = await safe(() => api('studio_insert', { take: t.id }));
-        if (r) { S.inserted = true; toast('Вставлено в DZOD Studio: ' + r.name + '. Окно закрывается…'); document.querySelectorAll('.icon-btn.insert').forEach(x => x.disabled = true); }
+        if (r) { S.inserted = true; toast('Вставлено в DZOD Studio: ' + r.name + '. Окно закрывается…'); document.querySelectorAll('.insert').forEach(x => x.disabled = true); }
       };
-      sv.textContent = 'Сохранить как…';
-      btns.append(ins, sv, same, show, del);
-    } else btns.append(near, sv, same, show, del);
+      acts.appendChild(ins);
+    }
+    const more = el('<button class="v7-btn sm" title="Ещё действия с дублем">⋯</button>');
+    more.onclick = e => {
+      e.stopPropagation();
+      menu(more, [
+        { label: 'Вернуть настройки дубля в панель', fn: () => { applyOpts(t.opts); setPresetSel('__custom'); toast('Настройки дубля № ' + t.num + ' возвращены в панель.'); } },
+        { label: 'Показать файл в папке', fn: () => api('open', { path: t.path, select: true }) },
+        { label: 'Сохранить как…', fn: () => saveAs(t.path, t.file) },
+        S.info && S.info.studio ? null : { label: 'Рядом с исходником (…_ResingerNN.wav)', fn: async () => {
+          const r = await safe(() => api('take_place', { id: s.id, take: t.id }));
+          if (r) { toast('Сохранено рядом с исходником: ' + r.name); S.song = r.song; }
+        } },
+        { label: 'Удалить дубль…', danger: true, fn: async () => {
+          if (!(await modal({ title: 'Удалить дубль № ' + t.num + '?', text: t.file, ok: 'Удалить' }))) return;
+          const r = await safe(() => api('take_delete', { id: s.id, take: t.id }));
+          if (r) { S.song = r; renderSong(); }
+        } },
+      ]);
+    };
+    acts.appendChild(more);
+    box.appendChild(row);
+  }
+}
+/* A/B для дублей: переключает играющий дубль между исходником и дублем без остановки */
+$('takes-ab').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('takes-ab').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  const st = Player.state();
+  if (st.id && st.id.startsWith('take_')) Player.setSide(b.dataset.s);
+});
+Player.on(st => {
+  if (st.id && st.id.startsWith('take_')) $('takes-ab').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.s === st.side));
+});
+
+/* ================================================================= ТЕКСТ (перепевка с текстом) */
+// Слова текста с позициями — как words_pos в движке (textfix): метки [Verse], {Bridge}, (x2) не поются
+function txWords(lyrics) {
+  const out = [];
+  const tag = /\[[^\]]*\]|\{[^}]*\}|\((?:x|х)?\s*\d+\s*(?:x|х|раза?)?\)/gi;
+  let pos = 0;
+  for (const line of lyrics.split('\n')) {
+    const clean = line.replace(tag, m => ' '.repeat(m.length));
+    if (/[A-Za-zА-Яа-яЁё]/.test(clean)) {
+      const re = /[A-Za-zА-Яа-яЁё']+(?:-[A-Za-zА-Яа-яЁё']+)*/g;
+      let m;
+      while ((m = re.exec(clean))) {
+        let w = m[0], a = m.index;
+        const lead = w.length - w.replace(/^'+/, '').length;
+        w = w.replace(/^'+|'+$/g, '');
+        if (/[A-Za-zА-Яа-яЁё]/.test(w)) out.push({ text: w, from: pos + a + lead, to: pos + a + lead + w.length });
+      }
+    }
+    pos += line.length + 1;
+  }
+  return out;
+}
+function txMarkOf(w) { return S.tx.marks.find(m => m.from < w.to && m.to > w.from); }
+function txAnalysisOf(w) { return S.tx.words ? S.tx.words.find(x => x.from === w.from && x.to === w.to) : null; }
+function txPlanOf(m) { return (S.tx.plan || []).find(p => p.mark && p.mark.from === m.from && p.mark.to === m.to); }
+
+function openText(t) {
+  S.tx = { take: t, lyrics: S.song.lyrics || '', marks: [], words: null, plan: null, mode: (S.song.lyrics || '').trim() ? 'mark' : 'edit',
+           result: null, sel: -1 };
+  $('text-over').hidden = false;
+  renderText();
+}
+function closeText() { $('text-over').hidden = true; S.tx = null; Player.stop(); }
+
+function renderText() {
+  const T = S.tx, o = $('text-over');
+  if (!T) return;
+  const tk = T.take, nn = String(tk.num).padStart(2, '0');
+  o.innerHTML = `
+    <div class="v7-mh"><div class="v7-mh-t"><h2>Текст · дубль ${nn}</h2>
+      <p>Пометьте съеденные слова (щелчок) или замените слово (двойной щелчок). Перепоются только помеченные места — остальное в дубле останется бит в бит.</p></div>
+      <span class="grow"></span>
+      <button class="v7-btn" id="tx-an" title="Найти, где в записи каждое слово текста: подсветка подозрительных слов и места пометок">Найти слова в записи</button>
+      <button class="v7-btn" id="tx-close">Закрыть</button></div>
+    <div class="tx-grid">
+      <div class="v7-card"><h5><b>1</b>Текст песни<i></i>
+        <div class="v7-seg" id="tx-mode"><button data-v="mark">Пометки</button><button data-v="edit">Правка текста</button></div></h5>
+        <div id="tx-body" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
+        <div class="tx-legend"><span><i style="background:rgba(227,163,94,.85)"></i>исправить (съедено)</span>
+          <span><i style="background:rgba(166,120,228,.85)"></i>заменить слово</span>
+          <span><i class="sus-i">〰</i>возможно, съедено</span>
+          <span><i style="background:#3a3c42"></i>не найдено в записи</span></div>
+      </div>
+      <div class="v7-card"><h5><b>2</b>Пометки<i></i><em id="tx-cnt"></em></h5><div class="tx-marks" id="tx-marks"></div></div>
+    </div>
+    <div class="tx-foot"><button class="v7-btn go big" id="tx-fix">Исправить по тексту</button>
+      <div class="prog"><i id="tx-pg"></i></div><span class="v7-note" id="tx-note"></span></div>`;
+  segSet('tx-mode', T.mode);
+  segBind('tx-mode', v => { txSyncEdit(); T.mode = v; renderText(); });
+  $('tx-close').onclick = () => { txSyncEdit(); closeText(); };
+  $('tx-an').onclick = txAnalyze;
+  $('tx-fix').onclick = txFix;
+  const body = $('tx-body');
+  if (T.mode === 'edit') {
+    const ta = el('<textarea class="tx-edit" id="tx-edit" spellcheck="false" placeholder="Вставьте текст песни — как поётся. Метки [Verse 1], [Chorus] можно оставить."></textarea>');
+    ta.value = T.lyrics;
+    body.appendChild(ta);
+    body.appendChild(el('<p class="v7-note" style="margin:6px 0 0">Текст — как он <b>поётся в записи</b>: по нему программа находит слова. Новое слово для замены задаётся в режиме «Пометки» двойным щелчком.</p>'));
+  } else {
+    const box = el('<div class="tx-lyrics" id="tx-lyrics"></div>');
+    const ws = txWords(T.lyrics);
+    if (!ws.length) box.innerHTML = '<div class="tx-empty">Текста нет. Откройте «Правка текста» и вставьте текст песни.</div>';
+    else {
+      let html = '', at = 0;
+      const tagRe = /\[[^\]]*\]|\{[^}]*\}/g;
+      const plain = str => esc(str).replace(tagRe, m => `<span class="tag">${m}</span>`);
+      ws.forEach((w, i) => {
+        html += plain(T.lyrics.slice(at, w.from));
+        const m = txMarkOf(w), an = txAnalysisOf(w);
+        const cls = ['w', m ? (m.replace ? 'rep' : 'mk') : '', an && an.suspect ? 'sus' : '', an && an.t0 == null ? 'miss' : '',
+          m && T.sel >= 0 && T.marks[T.sel] === m ? 'cur' : ''].filter(Boolean).join(' ');
+        const tip = an ? (an.t0 == null ? 'не найдено в записи' : `в записи ${num(an.t0)}–${num(an.t1)} с`) : '';
+        html += `<span class="${cls}" data-i="${i}" title="${esc(tip)}">${m && m.replace && m.from === w.from ? esc(m.replace) : esc(w.text)}</span>`;
+        at = w.to;
+      });
+      html += plain(T.lyrics.slice(at));
+      box.innerHTML = html;
+      let clickT = 0;
+      box.onclick = e => {
+        const sp = e.target.closest('.w');
+        if (!sp) return;
+        clearTimeout(clickT);
+        clickT = setTimeout(() => txToggle(ws[+sp.dataset.i]), 230);   // ждём: вдруг двойной щелчок
+      };
+      box.ondblclick = e => {
+        const sp = e.target.closest('.w');
+        if (!sp) return;
+        clearTimeout(clickT);
+        txReplace(ws[+sp.dataset.i]);
+      };
+    }
+    body.appendChild(box);
+  }
+  renderTextMarks();
+}
+function txSyncEdit() {
+  const ta = $('tx-edit');
+  if (!ta || !S.tx) return;
+  if (ta.value !== S.tx.lyrics) {
+    S.tx.lyrics = ta.value;
+    S.tx.marks = []; S.tx.words = null; S.tx.plan = null;
+    api('song_lyrics', { id: S.song.id, lyrics: ta.value }).then(() => { S.song.lyrics = ta.value; }).catch(() => {});
+  }
+}
+function txToggle(w) {
+  const T = S.tx, m = txMarkOf(w);
+  if (m) { T.marks.splice(T.marks.indexOf(m), 1); T.sel = -1; }
+  else { T.marks.push({ from: w.from, to: w.to }); T.marks.sort((a, b) => a.from - b.from); T.sel = T.marks.findIndex(x => x.from === w.from); }
+  renderText();
+}
+async function txReplace(w) {
+  const T = S.tx, m = txMarkOf(w);
+  const v = await modal({ title: `Заменить слово «${w.text}»`, text: 'Новое слово (или несколько). Оно пропоётся на месте старого, в ту же мелодию и подачу. Пусто — убрать замену.',
+    input: true, value: m && m.replace ? m.replace : '' });
+  if (v === null || v === false || v === undefined) return;
+  const nv = String(v).trim();
+  if (m) T.marks.splice(T.marks.indexOf(m), 1);
+  if (nv && nv !== w.text) T.marks.push({ from: w.from, to: w.to, replace: nv });
+  else if (!nv && m && !m.replace) T.marks.push({ from: w.from, to: w.to });
+  T.marks.sort((a, b) => a.from - b.from);
+  renderText();
+}
+
+function renderTextMarks() {
+  const T = S.tx, box = $('tx-marks');
+  $('tx-cnt').textContent = T.marks.length ? `${T.marks.length} · ${T.plan ? 'места найдены' : 'нажмите «Найти слова в записи», чтобы увидеть места'}` : '';
+  box.innerHTML = '';
+  if (!T.marks.length) {
+    box.innerHTML = '<div class="tx-empty">Пометок нет.<br>Щелчок по слову — исправить съеденное (звук, слог, слово).<br>Двойной щелчок — заменить слово другим.<br><br>' +
+      'Подсказка: «Найти слова в записи» подчеркнёт слова, которые, похоже, съедены.</div>';
+    $('tx-fix').disabled = true;
+    return;
+  }
+  $('tx-fix').disabled = false;
+  const ws = txWords(T.lyrics);
+  T.marks.forEach((m, k) => {
+    const old = ws.filter(w => w.from < m.to && w.to > m.from).map(w => w.text).join(' ');
+    const pl = txPlanOf(m);
+    const where = !pl ? 'место ещё не искали' : (!pl.found ? 'не найдено: ' + (pl.why || '') :
+      `${num(pl.t0)}–${num(pl.t1)} с · ` + ({ found: 'найдено', hole: 'по провалу (съедено)', gap: 'между соседями — проверьте на слух', manual: 'границы ваши' }[pl.where] || pl.where));
+    const card = el(`<div class="tx-mk ${k === T.sel ? 'on' : ''}"><div class="hd">
+      <b>${m.replace ? `<s>${esc(old)}</s> → ${esc(m.replace)}` : esc(old)}</b><small>${esc(where)}</small><span class="grow"></span>
+      <button class="v7-x" title="Убрать пометку">✕</button></div></div>`);
+    card.querySelector('.v7-x').onclick = () => { T.marks.splice(k, 1); T.sel = -1; renderText(); };
+    card.onclick = e => { if (e.target.closest('button')) return; T.sel = k; document.querySelectorAll('.tx-mk').forEach((c, i) => c.classList.toggle('on', i === k)); };
+    if (pl && pl.found) card.appendChild(txWave(m, pl, k));
     box.appendChild(card);
+  });
+}
+// Волна вокруг места пометки (±0,8 с): «было» — дубль, «станет» — исправленный; границы двигаются по 40 мс
+function txWave(m, pl, k) {
+  const T = S.tx, s = S.song;
+  const t0 = m.t0 != null ? m.t0 : pl.t0, t1 = m.t1 != null ? m.t1 : pl.t1;
+  const a = Math.max(0, t0 - 0.8), b = t1 + 0.8;
+  const w = el(`<div><div class="wave"><canvas></canvas><div class="span"></div></div>
+    <div class="nudge"><button class="v7-btn sm" data-p="old">▶ Было</button>
+      <button class="v7-btn sm" data-p="new" ${T.result ? '' : 'disabled'}>▶ Станет</button>
+      <span class="grow"></span>начало <button class="v7-btn sm" data-n="0,-1">◀</button><button class="v7-btn sm" data-n="0,1">▶</button>
+      конец <button class="v7-btn sm" data-n="1,-1">◀</button><button class="v7-btn sm" data-n="1,1">▶</button></div></div>`);
+  const cv = w.querySelector('canvas'), sp = w.querySelector('.span');
+  const path = T.take.path;
+  api('peaks', { path, n: 300, t0: a, t1: b }).then(pk => { drawWave(cv, pk, '#e3a35e', null); }).catch(() => {});
+  sp.style.left = (100 * (t0 - a) / (b - a)) + '%';
+  sp.style.width = (100 * (t1 - t0) / (b - a)) + '%';
+  w.querySelectorAll('[data-p]').forEach(btn => btn.onclick = async () => {
+    const f = btn.dataset.p === 'new' && T.result ? T.result.path : path;
+    const id = 'tx_' + btn.dataset.p + '_' + k;
+    const pk = await peaksOf(f, 0).catch(() => null);
+    const dur = pk ? pk.seconds : 0;
+    Player.stop();
+    if (dur) await Player.seek(id, Math.max(0, a) / dur, media(f, 0), null);
+    await Player.toggle(id, media(f, 0), null);
+    clearTimeout(S.txStop);
+    S.txStop = setTimeout(() => { const st = Player.state(); if (st.id === id && st.playing) Player.pause(); }, (b - a) * 1000 + 300);
+  });
+  w.querySelectorAll('[data-n]').forEach(btn => btn.onclick = () => {
+    const [side, dir] = btn.dataset.n.split(',').map(Number);
+    if (m.t0 == null) { m.t0 = pl.t0; m.t1 = pl.t1; }
+    if (side === 0) m.t0 = Math.max(0, Math.min(m.t1 - 0.06, m.t0 + dir * 0.04));
+    else m.t1 = Math.max(m.t0 + 0.06, m.t1 + dir * 0.04);
+    pl.t0 = m.t0; pl.t1 = m.t1; pl.where = 'manual';
+    renderTextMarks();
+  });
+  return w;
+}
+
+async function txAnalyze() {
+  txSyncEdit();
+  const T = S.tx;
+  if (!T.lyrics.trim()) { toast('Сначала вставьте текст песни (режим «Правка текста»).', true); return; }
+  if (!(await needEngine())) return;
+  T.pending = 'analyze';
+  $('tx-note').textContent = 'Ищу слова в записи…';
+  await startJob(() => api('text_analyze', { id: S.song.id, take: T.take.id, lyrics: T.lyrics, marks: T.marks }));
+}
+async function txFix() {
+  txSyncEdit();
+  const T = S.tx;
+  if (!T.marks.length) return;
+  if (!(await needEngine())) return;
+  T.pending = 'fix';
+  $('tx-note').textContent = 'Исправляю помеченные места…';
+  await startJob(() => api('text_fix', { id: S.song.id, take: T.take.id, lyrics: T.lyrics, marks: T.marks }));
+}
+// результат работ «Текст» (из jobFinished)
+function txJobDone(j) {
+  const T = S.tx, r = j.result || {};
+  if (!T) { if (r.id && S.song && S.song.id === r.id) { S.song = r; renderSong(); } return; }
+  if (j.state !== 'done') { $('tx-note').textContent = 'Ошибка: ' + (j.error || ''); return; }
+  if (r.words) {           // разбор
+    T.words = r.words; T.plan = r.plan || [];
+    const sus = r.words.filter(w => w.suspect).length, miss = r.words.filter(w => w.t0 == null).length;
+    renderText();
+    $('tx-note').textContent = `Слов в тексте: ${r.words.length} · подозрительных (возможно, съедены): ${sus}` + (miss ? ` · не найдены в записи: ${miss}` : '');
+  } else if (r.id) {       // исправление → новый дубль
+    S.song = r;
+    (r.made || []).forEach(x => S.newTakes.add(x));
+    const nt = (r.takes || []).find(x => (r.made || []).includes(x.id));
+    T.result = nt || null;
+    T.plan = r.text_plan || T.plan;
+    renderSong();
+    $('text-over').hidden = false;
+    renderText();
+    $('tx-note').textContent = nt ? `Готово: новый дубль № ${String(nt.num).padStart(2, '0')}. Изменено мест: ${(r.changed || []).length}. Слушайте «Было / Станет» у каждой пометки.` : 'Готово.';
   }
 }
 
@@ -1071,6 +1365,7 @@ async function loadEngine() {
   const e = await safe(() => api('engine'));
   if (!e) return;
   S.info.engine = e;
+  renderStatus();
   await loadSepModels();
   renderEngine();
   loadLog();
@@ -1158,6 +1453,7 @@ $('eng-reinstall').onclick = async () => {
 };
 $('eng-log').onclick = () => api('open', { path: S.info.log });
 $('log-refresh').onclick = loadLog;
+$('eng-log-open').addEventListener('click', () => { if (!$('pop-log').hidden) loadLog(); });
 async function loadLog() {
   const r = await safe(() => api('log_tail', { chars: 16000 }));
   if (!r) return;
@@ -1207,8 +1503,9 @@ async function pollJob(force) {
 function renderJob() {
   const j = S.job;
   const bar = $('jobbar');
-  if (!j || j.state === 'idle' || (j.state !== 'running' && S.jobSeen === j.id)) { bar.hidden = true; return; }
+  if (!j || j.state === 'idle' || (j.state !== 'running' && S.jobSeen === j.id)) { bar.hidden = true; $('v7-status').hidden = false; return; }
   bar.hidden = false;
+  $('v7-status').hidden = true;     // 0.7: одна нижняя строка — статус или ход работы
   bar.className = j.state === 'error' || j.state === 'cancelled' ? 'err' : (j.state === 'done' ? 'ok' : '');
   $('jb-title').textContent = j.title;
   $('jb-msg').textContent = j.state === 'error' ? j.error : (j.state === 'done' ? 'готово' : (j.state === 'cancelled' ? 'остановлено' : j.msg));
@@ -1236,6 +1533,7 @@ $('jb-close').onclick = () => { if (S.job) S.jobSeen = S.job.id; renderJob(); };
 
 async function jobFinished(j) {
   if (j.state === 'error') {
+    if (j.kind === 'text') txJobDone(j);
     if (j.error && j.error.length > 140) modal({ title: j.title + ': ошибка', text: j.error, cancel: false });
   }
   if (j.state === 'done') {
@@ -1248,6 +1546,7 @@ async function jobFinished(j) {
       toast('Чистка готова' + (r.seconds ? ` за ${fmtTime(r.seconds)}` : '') + '. Послушайте вокал и бэки.');
       loadSongs();
     }
+    if (j.kind === 'text') txJobDone(j);
     if (j.kind === 'convert' && r.id) {
       (r.made || []).forEach(x => S.newTakes.add(x));
       if (S.song && S.song.id === r.id) { S.song = r; renderSong(); }
@@ -1299,6 +1598,8 @@ async function loadExec() {
     <div><b>${esc(x.name)}</b><span>${esc(EX_STEP_TEXT[x.id] || '')}</span></div></div>`).join('');
   $('ex-pill').textContent = st.ready ? 'установлен' : 'не установлен';
   $('ex-pill').className = 'state-pill ' + (st.ready ? 'ok' : '');
+  $('ex-install-card').hidden = !!st.ready;
+  $('ex-notes-card').hidden = $('ex-work').hidden = !st.ready;   // до установки — только карточка установки
   $('ex-install').textContent = st.ready ? 'Executor готов' : (st.steps.some(x => x.done) ? 'Продолжить установку' : 'Установить Executor');
   $('ex-install').disabled = st.ready || running || !(S.info && S.info.engine && S.info.engine.ready);
   const pr = await safe(() => api('exec_presets'));
@@ -1319,9 +1620,37 @@ async function loadExec() {
   $('ex-sing-note').textContent = !vs.length ? 'Нужен голос с моделью (шаг 2 «Голос»).' : (!st.ready ? 'Сначала установите Executor.' : (!S.exMidi ? 'Выберите MIDI.' : (S.exNote || '')));
   renderExecResults();
 }
+/* 0.7: пиано-ролл по разметке (meta Executor): ноты фиолетовые, слог над нотой; «-» и паузы — приглушённые */
+function drawRoll(meta, warnings) {
+  const roll = $('ex-roll');
+  const notes = [];
+  for (const m of meta || []) {
+    const words = m.text.split(' '), pit = m.note_pitch.split(' ').map(Number), ty = m.note_type.split(' '), du = m.duration.split(' ').map(Number);
+    let t = m.time[0] / 1000;
+    words.forEach((w, k) => {
+      if (pit[k] > 0 && w !== '<SP>') notes.push({ t, d: du[k], p: pit[k], w: ty[k] === '3' ? '-' : w.replace(/^\[|\]$/g, '').replace(/_/g, ' '), ext: ty[k] === '3' });
+      t += du[k];
+    });
+  }
+  if (!notes.length) { roll.innerHTML = '<div class="v7-roll-empty">Нот с текстом не найдено.</div>'; return; }
+  const t1 = Math.max(...notes.map(n => n.t + n.d)), pmin = Math.min(...notes.map(n => n.p)) - 2, pmax = Math.max(...notes.map(n => n.p)) + 2;
+  const W = roll.clientWidth || 1150, H = roll.clientHeight || 190;
+  const x = t => 6 + (W - 12) * t / t1, y = pp => 18 + (H - 30) * (pmax - pp) / Math.max(1, pmax - pmin);
+  let html = '';
+  for (let b = 0; b < t1; b += 2) html += `<div class="bl" style="left:${x(b)}px"></div>`;
+  let lastLab = -99;
+  for (const n of notes) {
+    const left = x(n.t), lab = left - lastLab > 26 ? esc(n.w) : '';
+    if (lab) lastLab = left;
+    html += `<div class="nt ${n.ext ? 'ext' : ''}" style="left:${left}px;top:${y(n.p)}px;width:${Math.max(3, x(n.t + n.d) - left - 1)}px" title="${esc(n.w)} · нота ${n.p}"><span>${lab}</span></div>`;
+  }
+  if (warnings && warnings.length) html += `<div class="warn">⚠ ${esc(warnings.slice(0, 2).join(' · '))}</div>`;
+  roll.innerHTML = html;
+}
 function renderExecMeta() {
   const r = S.exMeta, box = $('ex-meta');
   if (!r) { box.innerHTML = ''; $('ex-check-sum').textContent = ''; return; }
+  drawRoll(r.meta, r.warnings);
   $('ex-check-sum').textContent = `фраз: ${r.segments} · длина ${fmtTime(r.length || 0)}`;
   box.innerHTML = (r.warnings || []).map(w => `<p class="warn small">${esc(w)}</p>`).join('') +
     (r.meta || []).map((m, i) => {
@@ -1484,13 +1813,14 @@ function applyFlavor() {
     document.querySelector('#song-empty h1').textContent = 'DZOD Revoicer';
     // знак и карточки вокалистов по макету DESIGN (revoicer.css)
     $('v-cards').className = 'rv-voices';
-    $('v-load-folder').hidden = true;
-    $('v-voice-k').innerHTML = 'Вокалист<small>папка с моделью голоса</small>';
+    // 0.7: «+ Папка» у поля Вокалист — загрузка вокалиста (макет DESIGN)
+    $('v-voice-k').textContent = 'Вокалист';
+    document.querySelector('.v7-takes-f .v7-note').textContent = '★ — лучший дубль · A/B — исходник и дубль на лету';
     document.querySelector('#song-empty .lead').textContent = 'Перепевка вокала вашим вокалистом DZOD. Вокалиста делает DZOD Vocalist; сюда его загружают папкой.';
   }
   if (st) {
     $('song-side').hidden = true;
-    $('fp-origin-show').closest('.files-panel').hidden = true;     // путь виден в плашке и у дубля (DESIGN)
+    document.querySelector('[data-pop="pop-files"]').hidden = true;     // путь виден в плашке и у дубля (DESIGN)
     $('studio-banner').hidden = false;
     $('studio-k').textContent = 'FROM DZOD STUDIO' + (st.space ? ' · ' + st.space : '') + ' · VOCALS';
     $('studio-line').textContent = st.line || 'Line';
@@ -1503,10 +1833,19 @@ function applyFlavor() {
 }
 
 /* ================================================================= запуск */
+function renderStatus() {
+  const i = S.info || {}, e = i.engine || {}, g = e.gpu;
+  $('st-led').className = 'led ' + (e.ready ? 'ok' : 'no');
+  $('st-eng').innerHTML = (e.ready ? 'Движок готов' : 'Движок не установлен') +
+    (g && g.cuda ? ` · <b>${esc(g.name.replace(/^NVIDIA (GeForce )?/, ''))}</b> · ${num(g.vram_gb, 1)} ГБ` : '');
+  $('st-dest').textContent = i.studio ? 'Результат — новой Line под исходной в DZOD Studio' :
+    (i.flavor === 'revoicer' ? 'Результат — рядом с исходником, …_ResingerNN.wav' : 'Результат — новой Line в Block Vocals DZOD Studio');
+}
 async function boot() {
   S.info = await api('info');
   $('ver').textContent = 'v' + S.info.version;
   applyFlavor();
+  renderStatus();
   S.job = S.info.job;
   buildSliders();
   const OLD = { 'Ровно': 'Стандарт', 'Гранж — надрыв': 'Надрыв и крик', 'Тихий куплет': 'Тихая партия' };
