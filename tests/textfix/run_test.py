@@ -203,12 +203,23 @@ def score(f, a, b, words, lang):
                 "align_model_dir": str(W / "exec" / "align")})
 
 
-bp = rB["plan"][0]
-RES["B_take_scores"] = score(OUT / "take_clean.wav", bp["t0"] - 0.1, bp["t1"] + 0.1, ["never", "wish"], "en")
-RES["B_replaced_scores"] = score(OUT / "replaced.wav", bp["t0"] - 0.1, bp["t1"] + 0.1, ["never", "wish"], "en")
-okB = (RES["B_outside_identical"]
-       and RES["B_replaced_scores"]["never"] - RES["B_replaced_scores"]["wish"]
-       > RES["B_take_scores"]["never"] - RES["B_take_scores"]["wish"])
+# эталон: SoulX сам поёт «never» на месте «wish» → та же перепевка; ближе ли замена к эталону, чем исходный дубль
+subprocess.run([EXEC_PY, str(REPO / "tests/executor/make_test_midi.py"), str(OUT / "never.mid"), "never"], check=True)
+(OUT / "segs_n").mkdir(exist_ok=True)
+run(EXEC_PY, WORK / "executor_worker.py",
+    {"midi": str(OUT / "never.mid"), "src_dir": str(W / "soulx"), "model": str(W / "models/model.pt"),
+     "prompt_wav": str(W / "en_prompt.wav"), "prompt_meta": str(W / "soulx/example/audio/en_prompt.json"),
+     "out_wav": str(OUT / "never_clean.wav"), "meta_out": str(OUT / "meta_n.json"), "notes_out": str(OUT / "notes_n.json"),
+     "seg_dir": str(OUT / "segs_n"), "cache_dir": str(OUT / "cache"), "fp16": False, "device": "cpu",
+     "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
+run(APPLIO_PY, WORK / "applio_worker.py",
+    {"items": [dict(item, input=str(OUT / "never_clean.wav"), output=str(OUT / "take_never.wav"))]}, cwd=str(W / "applio"))
+yn, _ = sf.read(OUT / "take_never.wav", dtype="float64", always_2d=True)
+yr, _ = sf.read(OUT / "replaced.wav", dtype="float64", always_2d=True)
+m3 = min(len(yn), len(yr), len(yc))
+yn, yr, yc3 = yn[:m3, 0], yr[:m3, 0], yc[:m3]
+RES["B_mfcc_to_never_ref"] = {"take_wish": round(dist(yc3, yn), 2), "replaced": round(dist(yr, yn), 2)}
+okB = RES["B_outside_identical"] and RES["B_mfcc_to_never_ref"]["replaced"] < RES["B_mfcc_to_never_ref"]["take_wish"]
 
 # ---- В. русский: исходник — речь Piper (голос dmitri), подсказка — Piper (irina); «съедено» слово «чудное»
 okC = True

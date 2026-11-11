@@ -80,7 +80,10 @@ def plan_marks(words, marks, f0_t, f0_midi, total, db=None, fps=100.0):
         nxt = [k for k in found if k > i1]
         lo = words[prev[-1]]["t1"] if prev else 0.0
         hi = words[nxt[0]]["t0"] if nxt else total
-        if all(reliable(k) for k in wi):
+        plausible = all(words[k]["t0"] is not None and words[k]["t1"] - words[k]["t0"] >= 0.03 * len(words[k]["text"]) + 0.06
+                        for k in wi)
+        if all(reliable(k) for k in wi) or (mk.get("replace") and plausible):
+            # замена: слово в записи целое — его место верное, даже если уверенность выравнивания низкая
             t0, t1 = words[i0]["t0"], words[i1]["t1"]
             where = "found"
             # помечено — значит, в этом месте звук испорчен: выравнивание находит только остаток слова.
@@ -335,6 +338,19 @@ def step_splice(job):
             ry, rz = float(np.sqrt(np.mean(edge_y ** 2) + 1e-12)), float(np.sqrt(np.mean(edge_z ** 2) + 1e-12))
             if ry > 1e-5 and rz > 1e-5:
                 seg = seg * min(4.0, max(0.25, ry / rz))
+            # уровень внутри — как у дубля рядом (до и после окна): модель поёт восстановленный слог своей громкостью
+            inner = seg[xf:-xf]
+            if len(inner) > 16:
+                ri = float(np.sqrt(np.mean(inner ** 2) + 1e-12))
+                if ri > 1e-5 and ry > 1e-5:
+                    gl = float(np.clip(ry / ri, 0.5, 2.0))
+                    if abs(20 * np.log10(gl)) > 1.0:
+                        env = np.ones(len(seg))
+                        env[xf:-xf] = gl
+                        ramp = _fade(xf)
+                        env[:xf] = 1 + (gl - 1) * ramp
+                        env[-xf:] = 1 + (gl - 1) * ramp[::-1]
+                        seg = seg * env
             w = np.ones(b - a)
             f = _fade(xf)
             w[:xf] = f
