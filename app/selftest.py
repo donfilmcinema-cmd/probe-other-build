@@ -240,7 +240,11 @@ def run(log=print):
         check("Revoicer: тот же Slice открывается с прежними дублями", ses2.song_id == ses.song_id)
         ses2.cancel()
         r3 = _j.loads((rq / "studio_res2.json").read_text(encoding="utf-8"))
-        check("Revoicer: закрыли без вставки — ответ «отменено»", r3 == {"ok": False, "cancelled": True, "studio": req["studio"]}, str(r3))
+        # 0.7.1: закрыли без «В Studio», а дубль есть — результат не теряется: Studio получает последний дубль
+        # с confirmed: false (уже положенный файл — без нового номера)
+        check("Revoicer: закрыли без вставки — последний дубль отдан Studio без подтверждения",
+              r3.get("ok") is True and r3.get("confirmed") is False and Path(r3["files"][0]["path"]).exists()
+              and r3["studio"] == req["studio"] and not (proj / "RIGOR 04 Vocal_Resinger02.wav").exists(), str(r3)[:300])
         dst2, _t = R.place(ses.song_id, "t1")
         check("«Рядом с исходником» без Studio", dst2.name == "RIGOR 04 Vocal_Resinger02.wav" and dst2.exists())
 
