@@ -56,6 +56,47 @@ def _soulx_hint(ctx, tmp, p, workers):
             env=E.exec_env(), what="Подсказка звучания")
 
 
+def _parts_dir(out):
+    out = Path(out)
+    return out.parent / (out.stem + " - части")
+
+
+def _keep_parts(tmp, out, quality, checks, plan):
+    """Промежуточные файлы рядом с новым дублем — автор может послушать и прислать:
+    rNN_src (исходник), rNN_hint (подсказка), rNN_content (звук для содержания), rNN_out (перепетое окно),
+    план, оценка. Только окна вокруг пометок (секунды), не вся песня."""
+    try:
+        d = _parts_dir(out)
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True, exist_ok=True)
+        reg = Path(tmp) / "reg"
+        if reg.exists():
+            for f in sorted(reg.glob("r*_*.wav")):
+                shutil.copy2(f, d / f.name)
+        regs = []
+        if (Path(tmp) / "regions.json").exists():
+            regs = json.loads((Path(tmp) / "regions.json").read_text(encoding="utf-8"))
+        rep = {"plan": plan.get("plan"), "regions": [{"file": f"r{k:02d}", "from_s": r["a"], "to_s": r["b"],
+                                                      "spans": r["spans"]} for k, r in enumerate(regs)],
+               "quality": quality, "checks": checks}
+        (d / "отчёт.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+        lines = ["Перепевка с текстом — промежуточные файлы (для проверки; можно удалить).",
+                 "rNN_src — исходник окна, rNN_hint — подсказка звучания, rNN_content — звук для содержания,",
+                 "rNN_out — перепетое окно (до вклейки). Время окна в песне — в отчёт.json (from_s / to_s).", ""]
+        for q in quality:
+            lines.append(f"«{q.get('text')}» {q['t0']:.2f}–{q['t1']:.2f} с: подсказка голос {q['hint_voiced']:.0%}, "
+                         f"{q['hint_db']} дБ" + (f" — ПРОПУЩЕНО: {q['skip']}" if q.get("skip") else ""))
+        for c in checks:
+            lines.append(f"место {c['t0']:.2f}–{c['t1']:.2f} с: {c['verdict']} (голос: было {c['take_voiced']:.0%}, "
+                         f"стало {c['new_voiced']:.0%})" + (f" — {c['kept']}" if c.get("kept") else ""))
+        (d / "ЧИТАЙ.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return d
+    except Exception as ex:  # noqa: BLE001
+        E.log(f"Перепевка с текстом: части не сохранены: {ex}")
+        return None
+
+
 def analyze(ctx, source, lyrics, marks=None, language="auto"):
     """Только разбор: где в записи каждое слово текста, подозрительные (возможно, съедены), где найдены пометки.
     Для окна «Текст» — подсветка и «найденное место» до перепевки."""
@@ -104,9 +145,16 @@ def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", h
         # 3. звук для содержания + окна перепевки
         ctx.span(0.55, 0.62, "Содержание для перепевки…")
         cj = {"step": "content", "input": str(source), "hint_wav": str(tmp / "hint.wav"), "plan": str(tmp / "plan.json"),
-              "content_out": str(tmp / "content.wav"), "region_dir": str(tmp / "reg"), "regions_out": str(tmp / "regions.json")}
-        ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "content", cj)], env=E.exec_env(), what="Содержание")
+              "content_out": str(tmp / "content.wav"), "region_dir": str(tmp / "reg"), "regions_out": str(tmp / "regions.json"),
+              "quality_out": str(tmp / "quality.json")}
+        rc = ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "content", cj)], env=E.exec_env(),
+                     what="Содержание") or {}
+        quality = rc.get("quality") or []
         regs = json.loads((tmp / "regions.json").read_text(encoding="utf-8"))
+        if not regs:
+            _keep_parts(tmp, out, quality, [], plan)
+            raise E.EngineError("Подсказка звучания не получилась ни для одной пометки (пустая или не голосом) — "
+                                "дубль не изменён. Промежуточные файлы — в папке «" + _parts_dir(out).name + "».")
         # 4. та же перепевка окон: высота и громкость — исходник, содержание — с подсказкой
         ctx.span(0.62, 0.95, "Перепевка помеченных мест…")
         base = {k: item[k] for k in APPLIO_KEYS if k in item}
@@ -119,9 +167,13 @@ def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", h
         out.parent.mkdir(parents=True, exist_ok=True)
         sj = {"step": "splice", "take": str(take), "regions": str(tmp / "regions.json"), "out": str(out)}
         r = ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "splice", sj)], env=E.exec_env(), what="Вклейка") or {}
+        checks = r.get("checks") or []
+        parts = _keep_parts(tmp, out, quality, checks, plan)
         E.log(f"ПЕРЕПЕВКА С ТЕКСТОМ: {take.name} → {out.name}: пометок {len(marks)}, найдено {len(found)}, "
-              f"{time.time() - t_all:.1f} с")
+              f"мест {len(regs)}, вклеено {len(r.get('changed', []))}, {time.time() - t_all:.1f} с; "
+              f"оценка: {[c.get('verdict') for c in checks]}; пропуски: {[q.get('skip') for q in quality if q.get('skip')]}")
         return {"file": str(out), "plan": plan["plan"], "words": plan["words"], "changed": r.get("changed", []),
+                "checks": checks, "quality": quality, "parts": str(parts) if parts else None,
                 "seconds": round(time.time() - t_all, 1)}
     finally:
         if not os.environ.get("DZOD_TEXTFIX_KEEP"):             # отладка: оставить промежуточные файлы

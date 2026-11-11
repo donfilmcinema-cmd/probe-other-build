@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.7.2"
+VERSION = "0.7.3"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 

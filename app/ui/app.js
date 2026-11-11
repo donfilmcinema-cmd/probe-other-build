@@ -821,8 +821,21 @@ function renderTextMarks() {
     const pl = txPlanOf(m);
     const where = !pl ? 'место ещё не искали' : (!pl.found ? 'не найдено: ' + (pl.why || '') :
       `${num(pl.t0)}–${num(pl.t1)} с · ` + ({ found: 'найдено', hole: 'по провалу (съедено)', gap: 'между соседями — проверьте на слух', manual: 'границы ваши' }[pl.where] || pl.where));
+    // честная оценка после исправления: голос ли получился в этом месте (или место пропущено)
+    let verdict = '';
+    if (T.result && pl && pl.t0 != null) {
+      const ov = x => x.t0 < pl.t1 + 0.05 && x.t1 > pl.t0 - 0.05;
+      const sk = (T.result.text_skipped || []).find(ov);
+      const ch = (T.result.text_checks || []).filter(ov);
+      if (sk) verdict = `<span class="tx-vd bad">пропущено: ${esc(sk.skip)}</span>`;
+      else if (ch.length) {
+        const worst = ch.find(c => c.verdict === 'не голос') || ch.find(c => c.verdict === 'сомнительно') || ch[0];
+        const cls = worst.verdict === 'голос' ? 'ok' : (worst.verdict === 'сомнительно' ? 'mid' : 'bad');
+        verdict = `<span class="tx-vd ${cls}" title="Доля звука голосом: было ${Math.round(100 * worst.take_voiced)}%, стало ${Math.round(100 * worst.new_voiced)}%">${esc(worst.verdict)}${worst.kept ? ' — оставлен прежний звук' : ''}</span>`;
+      }
+    }
     const card = el(`<div class="tx-mk ${k === T.sel ? 'on' : ''}"><div class="hd">
-      <b>${m.replace ? `<s>${esc(old)}</s> → ${esc(m.replace)}` : esc(old)}</b><small>${esc(where)}</small><span class="grow"></span>
+      <b>${m.replace ? `<s>${esc(old)}</s> → ${esc(m.replace)}` : esc(old)}</b><small>${esc(where)}</small>${verdict}<span class="grow"></span>
       <button class="v7-x" title="Убрать пометку">✕</button></div></div>`);
     card.querySelector('.v7-x').onclick = () => { T.marks.splice(k, 1); T.sel = -1; renderText(); };
     card.onclick = e => { if (e.target.closest('button')) return; T.sel = k; document.querySelectorAll('.tx-mk').forEach((c, i) => c.classList.toggle('on', i === k)); };
@@ -904,7 +917,17 @@ function txJobDone(j) {
     renderSong();
     $('text-over').hidden = false;
     renderText();
-    $('tx-note').textContent = nt ? `Готово: новый дубль № ${String(nt.num).padStart(2, '0')}. Изменено мест: ${(r.changed || []).length}. Слушайте «Было / Станет» у каждой пометки.` : 'Готово.';
+    const ck = r.checks || [], bad = ck.filter(c => c.verdict !== 'голос').length + (r.skipped || []).length;
+    const note = $('tx-note');
+    note.textContent = nt ? `Готово: новый дубль № ${String(nt.num).padStart(2, '0')} (прежний не тронут). Изменено мест: ${(r.changed || []).length}` +
+      (bad ? ` · под вопросом: ${bad} — там оставлен прежний звук или стоит «сомнительно».` : ' · все места — голосом.') +
+      ' Слушайте «Было / Станет» у каждой пометки; не понравилось — удалите дубль.' : 'Готово.';
+    if (r.parts) {
+      const b = el('<button class="v7-btn sm" style="margin-left:8px">Папка частей</button>');
+      b.title = 'Промежуточные файлы для проверки: исходник, подсказка, звук для содержания, перепетое окно — по каждому месту';
+      b.onclick = () => api('open', { path: r.parts });
+      note.appendChild(b);
+    }
   }
 }
 

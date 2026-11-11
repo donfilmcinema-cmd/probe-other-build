@@ -265,9 +265,77 @@ if (W / "piper" / "ru_RU-dmitri-medium.onnx").exists():
 else:
     print("== русский: Piper не установлен — пропуск")
 
-RES["ok"] = {"A_eaten_en": okA, "B_replace_en": okB, "C_eaten_ru": okC}
+# ---- Г. «poom → pay» (письмо sound 12.11): замена должна звучать голосом, без «стекла», в своём времени
+print("== замена слова: «poom» → «pay»")
+sys.path.insert(0, str(WORK))
+import textfix_worker as TW  # noqa: E402
+
+
+def sing(word, tag):
+    subprocess.run([EXEC_PY, str(REPO / "tests/executor/make_test_midi.py"), str(OUT / f"{tag}.mid"), word], check=True)
+    (OUT / f"segs_{tag}").mkdir(exist_ok=True)
+    run(EXEC_PY, WORK / "executor_worker.py",
+        {"midi": str(OUT / f"{tag}.mid"), "src_dir": str(W / "soulx"), "model": str(W / "models/model.pt"),
+         "prompt_wav": str(W / "en_prompt.wav"), "prompt_meta": str(W / "soulx/example/audio/en_prompt.json"),
+         "out_wav": str(OUT / f"{tag}_clean.wav"), "meta_out": str(OUT / f"meta_{tag}.json"),
+         "notes_out": str(OUT / f"notes_{tag}.json"), "seg_dir": str(OUT / f"segs_{tag}"), "cache_dir": str(OUT / "cache"),
+         "fp16": False, "device": "cpu", "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
+    run(APPLIO_PY, WORK / "applio_worker.py",
+        {"items": [dict(item, input=str(OUT / f"{tag}_clean.wav"), output=str(OUT / f"{tag}_take.wav"))]}, cwd=str(W / "applio"))
+
+
+sing("poom", "poom")
+sing("pay", "pay")
+LYR_D = LYR.replace("wish", "poom", 1)
+kD = LYR_D.index("poom")
+rD = TF.revoice_text(ctx, OUT / "poom_clean.wav", OUT / "poom_take.wav", item, LYR_D,
+                     [{"from": kD, "to": kD + 4, "replace": "pay"}], OUT / "poom_pay.wav")
+RES["D_plan"] = [{k: q.get(k) for k in ("found", "where", "t0", "t1", "text")} for q in rD["plan"]]
+RES["D_checks"] = rD.get("checks")
+RES["D_quality"] = rD.get("quality")
+RES["D_outside_identical"] = outside_same(OUT / "poom_pay.wav", OUT / "poom_take.wav", rD["changed"])
+yp, psr = sf.read(OUT / "poom_take.wav", dtype="float64", always_2d=True)
+yq, _ = sf.read(OUT / "pay_take.wav", dtype="float64", always_2d=True)
+yz, _ = sf.read(OUT / "poom_pay.wav", dtype="float64", always_2d=True)
+m4 = min(len(yp), len(yq), len(yz))
+RES["D_mfcc_to_pay_ref"] = {"take_poom": round(dist(yp[:m4, 0], yq[:m4, 0]), 2), "replaced": round(dist(yz[:m4, 0], yq[:m4, 0]), 2)}
+RES["D_voiced"] = {n_: TW._voicing(v[int(ws * psr):int(we * psr), 0], psr)[0] for n_, v in
+                   (("take_poom", yp), ("ref_pay", yq), ("replaced", yz))}
+okD = (RES["D_outside_identical"] and bool(rD["changed"])
+       and all(c["verdict"] == "голос" for c in rD.get("checks") or [])
+       and RES["D_voiced"]["replaced"] >= 0.5
+       and RES["D_mfcc_to_pay_ref"]["replaced"] < RES["D_mfcc_to_pay_ref"]["take_poom"])
+
+# ---- Д. испорченная подсказка (тишина): место не трогается, честная ошибка, промежуточные файлы сохранены
+print("== испорченная подсказка: место должно остаться прежним")
+_orig_hint = TF._soulx_hint
+
+
+def _silent_hint(ctx_, tmp, p_, workers):
+    xx, _ = sf.read(OUT / "poom_clean.wav", dtype="float32")
+    sf.write(Path(tmp) / "hint.wav", np.zeros(int(len(xx) / sr * 24000), np.float32), 24000, subtype="FLOAT")
+
+
+TF._soulx_hint = _silent_hint
+okE = False
+try:
+    TF.revoice_text(ctx, OUT / "poom_clean.wav", OUT / "poom_take.wav", item, LYR_D,
+                    [{"from": kD, "to": kD + 4, "replace": "pay"}], OUT / "poom_bad.wav")
+    RES["E"] = "НЕ ОСТАНОВИЛОСЬ: вклеено при пустой подсказке"
+except E.EngineError as ex:
+    parts = TF._parts_dir(OUT / "poom_bad.wav")
+    okE = (not (OUT / "poom_bad.wav").exists()) and (parts / "ЧИТАЙ.txt").exists()
+    RES["E"] = {"error": str(ex)[:200], "parts": sorted(f.name for f in parts.glob("*"))}
+finally:
+    TF._soulx_hint = _orig_hint
+# части рядом с дублем у удачных случаев
+RES["parts_D"] = sorted(f.name for f in TF._parts_dir(OUT / "poom_pay.wav").glob("*"))
+RES["A_checks"] = r.get("checks")
+RES["B_checks"] = rB.get("checks")
+
+RES["ok"] = {"A_eaten_en": okA, "B_replace_en": okB, "C_eaten_ru": okC, "D_poom_pay": okD, "E_bad_hint": okE}
 print("== ИТОГ", json.dumps(RES, ensure_ascii=False, indent=1))
-ok = okA and okB and okC
+ok = okA and okB and okC and okD and okE
 json.dump(RES, open(OUT / "result.json", "w"), ensure_ascii=False, indent=1)
 print("ПРОВЕРКА:", "OK" if ok else "НЕ ПРОШЛА")
 sys.exit(0 if ok else 1)

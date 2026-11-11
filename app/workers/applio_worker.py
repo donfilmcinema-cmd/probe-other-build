@@ -82,8 +82,26 @@ def _install_textfix_hooks():
             inside |= (tt >= t0) & (tt < t1)
         src_ok = f > 0
         ref = np.flatnonzero(src_ok & ~inside) if (src_ok & ~inside).any() else np.flatnonzero(src_ok)
+        # глухо по подсказке — только короткие глухие куски (согласные, до 0,15 с): длинный «глухой» кусок —
+        # это не согласная, а пустая/плохая подсказка; там высота — исходника, иначе вместо голоса шум
+        cfz = np.zeros(n, bool)
+        cfz[:min(n, len(cf))] = np.asarray(cf[:n]) <= 0
+        cfz[len(cf):] = True
+        uv = inside & cfz
+        lim = int(0.15 * self.sample_rate / self.window)
+        k = 0
+        while k < n:
+            if uv[k]:
+                e = k
+                while e < n and uv[e]:
+                    e += 1
+                if e - k > lim:
+                    uv[k:e] = False
+                k = e
+            else:
+                k += 1
         for k in np.flatnonzero(inside):
-            if k >= len(cf) or cf[k] <= 0:
+            if uv[k]:
                 f[k] = 0.0                                   # глухой звук подсказки — глухо
             elif f[k] <= 0 and len(ref):
                 # провал (съедено): высота по соседям — линейно в логарифме между ближайшими голосовыми кадрами

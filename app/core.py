@@ -147,7 +147,9 @@ def process(ctx, req):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         return {"files": [{"role": "dzod_lead", "path": r["file"], "voice": voice}], "plan": r["plan"],
-                "changed": r["changed"], "seconds": r["seconds"]}
+                "changed": r["changed"], "checks": r.get("checks", []),
+                "skipped": [q for q in r.get("quality", []) if q.get("skip")], "parts": r.get("parts"),
+                "seconds": r["seconds"]}
     if action == "sing":
         # DZOD Executor (E1): {"midi": "...mid", "voice": "<код голоса>", "convert": {...}, "output_dir": "..."}
         import executor as X

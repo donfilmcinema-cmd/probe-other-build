@@ -261,6 +261,33 @@ def regions_of(plan, total):
     return rs
 
 
+def _voicing(v, sr):
+    """Звук голосом? Доля «голосовых» кадров (периодичность 70–1000 Гц) среди слышимых и уровень, дБ.
+    По ней видно, что подсказка или результат — голос, а не шум/«стекло»/тишина."""
+    import numpy as np
+    v = np.asarray(v, dtype=np.float64)
+    if len(v) < int(0.05 * sr):
+        return 0.0, -120.0
+    lvl = 20 * np.log10(float(np.sqrt(np.mean(v ** 2))) + 1e-9)
+    fl, hop = int(0.04 * sr), int(0.01 * sr)
+    lo, hi = max(2, int(sr / 1000)), int(sr / 70)
+    fr = [v[i:i + fl] for i in range(0, len(v) - fl, hop)]
+    if not fr:
+        return 0.0, lvl
+    rm = np.array([np.sqrt(np.mean(f ** 2)) for f in fr])
+    loud = rm > rm.max() * 10 ** (-30 / 20)
+    voiced = 0
+    for f, ok in zip(fr, loud):
+        if not ok:
+            continue
+        f = f - f.mean()
+        ac = np.correlate(f, f, "full")[fl - 1:]
+        if ac[0] <= 0:
+            continue
+        voiced += int(ac[lo:hi].max() / ac[0] > 0.45)
+    return round(voiced / max(1, int(loud.sum())), 3), round(lvl, 1)
+
+
 def step_content(job):
     import numpy as np
     import soundfile as sf
@@ -282,33 +309,59 @@ def step_content(job):
     def rms(v):
         return float(np.sqrt(np.mean(v ** 2))) if len(v) else 0.0
 
-    for p, (w0, w1) in [(p, w) for p in plan["plan"] if p.get("found") for w in (p.get("windows") or [[p["t0"], p["t1"]]])]:
-        a, b = int(w0 * sr), int(w1 * sr)
-        a0, b1 = max(0, a - xf), min(len(x), b + xf)
-        seg = h[a0:b1].copy()
-        # уровень подсказки — как у исходника рядом (в провале исходник тих: берём соседей)
-        near = np.concatenate([x[max(0, a0 - int(0.4 * sr)):a0], x[b1:b1 + int(0.4 * sr)]])
-        ref = max(rms(near), rms(x[a0:b1]))
-        if rms(seg) > 1e-6 and ref > 1e-6:
-            seg *= min(8.0, ref / rms(seg))
-        w = np.ones(b1 - a0)
-        f = _fade(min(xf, len(w) // 2))
-        w[:len(f)] = f
-        w[len(w) - len(f):] = f[::-1]
-        c[a0:b1] = x[a0:b1] * (1 - w) + seg * w
+    quality = []
+    for mi, p in enumerate(plan["plan"]):
+        if not p.get("found"):
+            continue
+        keep = []
+        for (w0, w1) in (p.get("windows") or [[p["t0"], p["t1"]]]):
+            a, b = int(w0 * sr), int(w1 * sr)
+            a0, b1 = max(0, a - xf), min(len(x), b + xf)
+            seg = h[a0:b1].copy()
+            hv, hdb = _voicing(h[a:b], sr)
+            sv, sdb = _voicing(x[a:b], sr)
+            q = {"mark": p.get("mark", mi), "text": p.get("text"), "t0": round(w0, 3), "t1": round(w1, 3),
+                 "hint_voiced": hv, "hint_db": hdb, "src_voiced": sv, "src_db": sdb}
+            # подсказка пустая или не голос (шум, «стекло») — место не трогаем: лучше прежний звук, чем мусор
+            if hdb < -50 or hv < 0.25:
+                q["skip"] = "подсказка пустая" if hdb < -50 else "подсказка не голосом"
+                quality.append(q)
+                continue
+            # уровень подсказки — как у исходника рядом (в провале исходник тих: берём соседей); не больше +10 дБ
+            near = np.concatenate([x[max(0, a0 - int(0.4 * sr)):a0], x[b1:b1 + int(0.4 * sr)]])
+            ref = max(rms(near), rms(x[a0:b1]))
+            if rms(seg) > 1e-6 and ref > 1e-6:
+                g_ = min(3.0, ref / rms(seg))
+                seg *= g_
+                q["hint_gain_db"] = round(20 * np.log10(g_), 1)
+            w = np.ones(b1 - a0)
+            f = _fade(min(xf, len(w) // 2))
+            w[:len(f)] = f
+            w[len(w) - len(f):] = f[::-1]
+            c[a0:b1] = x[a0:b1] * (1 - w) + seg * w
+            keep.append([w0, w1])
+            quality.append(q)
+        p["windows"] = keep
+        if not keep:
+            p["found"] = False
+            p["skipped"] = True
     sf.write(job["content_out"], c.astype(np.float32), sr, subtype="FLOAT")
     regs = regions_of(plan["plan"], total)
     os.makedirs(job["region_dir"], exist_ok=True)
     for k, r in enumerate(regs):
         ia, ib = int(r["a"] * sr), int(r["b"] * sr)
         r["src"] = os.path.join(job["region_dir"], f"r{k:02d}_src.wav")
+        r["hint"] = os.path.join(job["region_dir"], f"r{k:02d}_hint.wav")
         r["content"] = os.path.join(job["region_dir"], f"r{k:02d}_content.wav")
         r["out"] = os.path.join(job["region_dir"], f"r{k:02d}_out.wav")
         sf.write(r["src"], x[ia:ib].astype(np.float32), sr, subtype="FLOAT")
+        sf.write(r["hint"], h[ia:ib].astype(np.float32), sr, subtype="FLOAT")
         sf.write(r["content"], c[ia:ib].astype(np.float32), sr, subtype="FLOAT")
         r["f0_spans"] = [[round(s0 - r["a"] - 0.02, 3), round(s1 - r["a"] + 0.02, 3)] for s0, s1 in r["spans"]]
     json.dump(regs, open(job["regions_out"], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    return {"regions_out": job["regions_out"], "regions": len(regs)}
+    if job.get("quality_out"):
+        json.dump(quality, open(job["quality_out"], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return {"regions_out": job["regions_out"], "regions": len(regs), "quality": quality}
 
 
 # ------------------------------------------------------------------ splice
@@ -322,6 +375,7 @@ def step_splice(job):
     out = y.copy()
     xf = int(XF * sr)
     changed = []
+    checks = []
     for r in regs:
         z, zsr = sf.read(r["out"], dtype="float64", always_2d=True)
         z = z.mean(1)
@@ -359,12 +413,21 @@ def step_splice(job):
             f = _fade(xf)
             w[:xf] = f
             w[-xf:] = f[::-1]
+            # честная оценка: новое место — голос? (сравнение с тем же местом дубля)
+            tv, tdb = _voicing(y[a + xf:b - xf].mean(1), sr)
+            nv, ndb = _voicing(seg[xf:-xf], sr)
+            verdict = "голос" if (nv >= 0.5 or nv >= 0.8 * tv) else ("сомнительно" if nv >= 0.3 else "не голос")
+            checks.append({"t0": round(a / sr, 3), "t1": round(b / sr, 3), "take_voiced": tv, "new_voiced": nv,
+                           "take_db": tdb, "new_db": ndb, "verdict": verdict})
+            if verdict == "не голос" and not job.get("force"):
+                checks[-1]["kept"] = "оставлен прежний звук"
+                continue
             for ch in range(out.shape[1]):
                 out[a:b, ch] = y[a:b, ch] * (1 - w) + seg * w
             changed.append([round(a / sr, 3), round(b / sr, 3)])
     info = sf.info(job["take"])
     sf.write(job["out"], out, sr, subtype=info.subtype if info.subtype in ("PCM_16", "PCM_24", "FLOAT") else "PCM_24")
-    return {"out": job["out"], "changed": changed}
+    return {"out": job["out"], "changed": changed, "checks": checks}
 
 
 # ------------------------------------------------------------------ piper (русский, или запасной путь)

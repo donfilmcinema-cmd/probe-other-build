@@ -165,12 +165,20 @@ def set_kind(song_id, kind):
     return s.view()
 
 
+def _drop_parts(s, t):
+    """Папка промежуточных файлов «Перепевки с текстом» рядом с дублем — уходит вместе с дублем."""
+    d = s.dir / (Path(t["file"]).stem + " - части")
+    if d.is_dir():
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def delete_take(song_id, take_id):
     s = get(song_id)
     keep = []
     for t in s.m.get("takes", []):
         if t["id"] == take_id:
             (s.dir / t["file"]).unlink(missing_ok=True)
+            _drop_parts(s, t)
         else:
             keep.append(t)
     s.m["takes"] = keep
@@ -191,6 +199,7 @@ def clear(song_id, what):
     elif what == "takes":
         for t in s.m.get("takes", []):
             (s.dir / t["file"]).unlink(missing_ok=True)
+            _drop_parts(s, t)
         s.m["takes"] = []
     else:
         raise E.EngineError("Неизвестно, что удалять.")
@@ -400,11 +409,16 @@ def text_fix(ctx, song_id, take_id, lyrics, marks, language="auto"):
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     nt = dict(t, id=f"t{int(time.time() * 1000)}fix", num=num, file=fname, made=time.time(),
-              fixed_from=t["id"], fixed_from_num=t.get("num"), text_marks=marks, changed=r.get("changed", []))
+              fixed_from=t["id"], fixed_from_num=t.get("num"), text_marks=marks, changed=r.get("changed", []),
+              text_checks=r.get("checks", []), text_skipped=[q for q in r.get("quality", []) if q.get("skip")])
     takes.append(nt)
     s.save()
     v = s.view()
     v["made"] = [nt["id"]]
     v["text_plan"] = r.get("plan", [])
     v["changed"] = r.get("changed", [])
+    v["checks"] = r.get("checks", [])
+    v["skipped"] = [q for q in r.get("quality", []) if q.get("skip")]
+    v["parts"] = r.get("parts")
+    v["fixed_from"] = t["id"]
     return v
