@@ -1,0 +1,93 @@
+{
+ "changed": [
+  [
+   0.63,
+   1.33
+  ]
+ ],
+ "outside_identical": true,
+ "mfcc_dirty_vs_clean": 100.1,
+ "mfcc_fixed_vs_clean": 67.4,
+ "level_dB": {
+  "clean": -21.1,
+  "dirty": -33.7,
+  "fixed": -17.6
+ },
+ "wish_dirty": {
+  "t0": 0.2,
+  "t1": 1.242,
+  "score": 0.0603,
+  "suspect": false
+ },
+ "wish_fixed": {
+  "t0": 0.661,
+  "t1": 1.302,
+  "score": 0.1235,
+  "suspect": false
+ },
+ "wish_clean": {
+  "t0": 0.621,
+  "t1": 1.222,
+  "score": 0.0653,
+  "suspect": false
+ },
+ "B_outside_identical": true,
+ "B_plan": [
+  {
+   "found": true,
+   "where": "found",
+   "t0": 0.621,
+   "t1": 1.261,
+   "text": "never"
+  }
+ ],
+ "B_mfcc_to_never_ref": {
+  "take_wish": 70.91,
+  "replaced": 46.46
+ },
+ "C_plan": [
+  {
+   "found": true,
+   "where": "found",
+   "t0": 0.783,
+   "t1": 1.124,
+   "text": "чудное"
+  }
+ ],
+ "C_outside_identical": true,
+ "C_word_take_dirty": {
+  "t0": 0.764,
+  "t1": 1.106,
+  "score": 0.1355,
+  "suspect": false
+ },
+ "C_word_fixed": {
+  "t0": 0.785,
+  "t1": 1.127,
+  "score": 0.1384,
+  "suspect": false
+ },
+ "C_word_take_clean": {
+  "t0": 0.805,
+  "t1": 1.127,
+  "score": 0.334,
+  "suspect": false
+ },
+ "C_level_dB": {
+  "clean": -19.8,
+  "dirty": -26.1,
+  "fixed": -18.5
+ },
+ "C_score_take_dirty": 0.0175,
+ "C_score_fixed": 0.0203,
+ "C_score_take_clean": 0.0744,
+ "C_mfcc": {
+  "dirty_vs_clean": 109.77,
+  "fixed_vs_clean": 72.24
+ },
+ "ok": {
+  "A_eaten_en": true,
+  "B_replace_en": true,
+  "C_eaten_ru": true
+ }
+}

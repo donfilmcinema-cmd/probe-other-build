@@ -1,0 +1,118 @@
+{
+ "language": "en",
+ "seconds": 11.58,
+ "words": [
+  {
+   "text": "I",
+   "line": 0,
+   "from": 0,
+   "to": 1,
+   "t0": 0.12,
+   "t1": 0.14,
+   "score": 0.0229,
+   "suspect": true
+  },
+  {
+   "text": "wish",
+   "line": 0,
+   "from": 2,
+   "to": 6,
+   "t0": 0.661,
+   "t1": 1.302,
+   "score": 0.1235,
+   "suspect": false
+  },
+  {
+   "text": "you",
+   "line": 0,
+   "from": 7,
+   "to": 10,
+   "t0": 1.322,
+   "t1": 1.463,
+   "score": 0.0106,
+   "suspect": true
+  },
+  {
+   "text": "were",
+   "line": 0,
+   "from": 11,
+   "to": 15,
+   "t0": 1.543,
+   "t1": 2.064,
+   "score": 0.1495,
+   "suspect": false
+  },
+  {
+   "text": "here",
+   "line": 0,
+   "from": 16,
+   "to": 20,
+   "t0": 2.584,
+   "t1": 3.125,
+   "score": 0.0965,
+   "suspect": false
+  },
+  {
+   "text": "tonight",
+   "line": 0,
+   "from": 21,
+   "to": 28,
+   "t0": 3.246,
+   "t1": 5.189,
+   "score": 0.0443,
+   "suspect": false
+  },
+  {
+   "text": "we",
+   "line": 1,
+   "from": 29,
+   "to": 31,
+   "t0": 6.411,
+   "t1": 6.531,
+   "score": 0.2883,
+   "suspect": false
+  },
+  {
+   "text": "are",
+   "line": 1,
+   "from": 32,
+   "to": 35,
+   "t0": 6.651,
+   "t1": 6.772,
+   "score": 0.0254,
+   "suspect": true
+  },
+  {
+   "text": "the",
+   "line": 1,
+   "from": 36,
+   "to": 39,
+   "t0": 6.992,
+   "t1": 7.112,
+   "score": 0.0387,
+   "suspect": false
+  },
+  {
+   "text": "beautiful",
+   "line": 1,
+   "from": 40,
+   "to": 49,
+   "t0": 7.553,
+   "t1": 8.635,
+   "score": 0.0783,
+   "suspect": false
+  },
+  {
+   "text": "no",
+   "line": 1,
+   "from": 50,
+   "to": 52,
+   "t0": 9.396,
+   "t1": 9.536,
+   "score": 0.0915,
+   "suspect": false
+  }
+ ],
+ "plan": [],
+ "hint_notes": 0
+}

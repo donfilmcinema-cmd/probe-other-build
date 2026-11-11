@@ -1,0 +1,144 @@
+{
+ "language": "en",
+ "seconds": 11.591,
+ "words": [
+  {
+   "text": "I",
+   "line": 0,
+   "from": 0,
+   "to": 1,
+   "t0": 0.18,
+   "t1": 0.2,
+   "score": 0.0086,
+   "suspect": true
+  },
+  {
+   "text": "wish",
+   "line": 0,
+   "from": 2,
+   "to": 6,
+   "t0": 0.621,
+   "t1": 1.261,
+   "score": 0.0904,
+   "suspect": false
+  },
+  {
+   "text": "you",
+   "line": 0,
+   "from": 7,
+   "to": 10,
+   "t0": 1.281,
+   "t1": 1.381,
+   "score": 0.0516,
+   "suspect": false
+  },
+  {
+   "text": "were",
+   "line": 0,
+   "from": 11,
+   "to": 15,
+   "t0": 1.561,
+   "t1": 2.042,
+   "score": 0.1543,
+   "suspect": false
+  },
+  {
+   "text": "here",
+   "line": 0,
+   "from": 16,
+   "to": 20,
+   "t0": 2.582,
+   "t1": 3.063,
+   "score": 0.085,
+   "suspect": false
+  },
+  {
+   "text": "tonight",
+   "line": 0,
+   "from": 21,
+   "to": 28,
+   "t0": 3.243,
+   "t1": 3.663,
+   "score": 0.0213,
+   "suspect": false
+  },
+  {
+   "text": "we",
+   "line": 1,
+   "from": 29,
+   "to": 31,
+   "t0": 6.406,
+   "t1": 6.526,
+   "score": 0.2361,
+   "suspect": false
+  },
+  {
+   "text": "are",
+   "line": 1,
+   "from": 32,
+   "to": 35,
+   "t0": 6.626,
+   "t1": 6.786,
+   "score": 0.0532,
+   "suspect": false
+  },
+  {
+   "text": "the",
+   "line": 1,
+   "from": 36,
+   "to": 39,
+   "t0": 6.987,
+   "t1": 7.107,
+   "score": 0.0334,
+   "suspect": false
+  },
+  {
+   "text": "beautiful",
+   "line": 1,
+   "from": 40,
+   "to": 49,
+   "t0": 7.527,
+   "t1": 8.588,
+   "score": 0.0518,
+   "suspect": false
+  },
+  {
+   "text": "no",
+   "line": 1,
+   "from": 50,
+   "to": 52,
+   "t0": 9.369,
+   "t1": 9.529,
+   "score": 0.2065,
+   "suspect": false
+  }
+ ],
+ "plan": [
+  {
+   "mark": {
+    "from": 2,
+    "to": 6,
+    "replace": "never"
+   },
+   "found": true,
+   "where": "found",
+   "words": [
+    1
+   ],
+   "t0": 0.621,
+   "t1": 1.261,
+   "windows": [
+    [
+     0.621,
+     1.261
+    ]
+   ],
+   "text": "never",
+   "replace": true,
+   "pitch": 66.94,
+   "ctx_prev": null,
+   "ctx_next": 3
+  }
+ ],
+ "hint_notes": 3
+}

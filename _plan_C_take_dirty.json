@@ -1,0 +1,88 @@
+{
+ "language": "ru",
+ "seconds": 3.42,
+ "words": [
+  {
+   "text": "Я",
+   "line": 0,
+   "from": 0,
+   "to": 1,
+   "t0": 0.362,
+   "t1": 0.422,
+   "score": 0.4962,
+   "suspect": false
+  },
+  {
+   "text": "помню",
+   "line": 0,
+   "from": 2,
+   "to": 7,
+   "t0": 0.503,
+   "t1": 0.724,
+   "score": 0.3099,
+   "suspect": false
+  },
+  {
+   "text": "чудное",
+   "line": 0,
+   "from": 8,
+   "to": 14,
+   "t0": 0.764,
+   "t1": 1.106,
+   "score": 0.1355,
+   "suspect": false
+  },
+  {
+   "text": "мгновенье",
+   "line": 0,
+   "from": 15,
+   "to": 24,
+   "t0": 1.147,
+   "t1": 1.589,
+   "score": 0.3386,
+   "suspect": false
+  },
+  {
+   "text": "передо",
+   "line": 1,
+   "from": 25,
+   "to": 31,
+   "t0": 1.73,
+   "t1": 2.032,
+   "score": 0.3996,
+   "suspect": false
+  },
+  {
+   "text": "мной",
+   "line": 1,
+   "from": 32,
+   "to": 36,
+   "t0": 2.052,
+   "t1": 2.334,
+   "score": 0.3757,
+   "suspect": false
+  },
+  {
+   "text": "явилась",
+   "line": 1,
+   "from": 37,
+   "to": 44,
+   "t0": 2.394,
+   "t1": 2.756,
+   "score": 0.2957,
+   "suspect": false
+  },
+  {
+   "text": "ты",
+   "line": 1,
+   "from": 45,
+   "to": 47,
+   "t0": 2.796,
+   "t1": 2.917,
+   "score": 0.261,
+   "suspect": false
+  }
+ ],
+ "plan": [],
+ "hint_notes": 0
+}

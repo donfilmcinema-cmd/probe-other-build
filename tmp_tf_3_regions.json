@@ -1,0 +1,21 @@
+[
+ {
+  "a": 0.0,
+  "b": 2.1,
+  "spans": [
+   [
+    0.79,
+    1.1
+   ]
+  ],
+  "src": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_3/reg/r00_src.wav",
+  "content": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_3/reg/r00_content.wav",
+  "out": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_3/reg/r00_out.wav",
+  "f0_spans": [
+   [
+    0.77,
+    1.12
+   ]
+  ]
+ }
+]
