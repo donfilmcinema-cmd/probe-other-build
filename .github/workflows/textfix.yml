@@ -68,7 +68,11 @@ jobs:
       - name: Результат — в ветку debug-textfix
         if: always()
         run: |
-          mkdir -p /tmp/dbg && cp w/out/*.json /tmp/dbg/ 2>/dev/null; for d in w/out/tmp_tf_*; do n=$(basename $d); for f in plan.json regions.json hint.wav content.wav hint.mid; do cp $d/$f /tmp/dbg/${n}_$f 2>/dev/null; done; cp $d/reg/*_out.wav /tmp/dbg/ 2>/dev/null; done; cp w/out/ru_*.wav w/out/replaced.wav /tmp/dbg/ 2>/dev/null; cp w/out/clean.wav w/out/dirty.wav w/out/take_dirty.wav w/out/take_clean.wav w/out/fixed.wav /tmp/dbg/ 2>/dev/null || true
+          set +e
+          mkdir -p /tmp/dbg; cp w/out/*.json /tmp/dbg/ 2>/dev/null
+          for d in w/out/tmp_tf_*; do n=$(basename $d); for f in plan.json regions.json hint.wav content.wav hint.mid; do cp $d/$f /tmp/dbg/${n}_$f 2>/dev/null; done; cp $d/reg/*_out.wav /tmp/dbg/ 2>/dev/null; done
+          cp w/out/ru_*.wav w/out/replaced.wav w/out/poom_*.wav w/out/pay_*.wav w/out/clean.wav w/out/dirty.wav w/out/take_dirty.wav w/out/take_clean.wav w/out/fixed.wav /tmp/dbg/ 2>/dev/null
+          set -e
           git config user.name "ci" && git config user.email "ci@users.noreply.github.com"
           git checkout -q --orphan dbg && git rm -rf -q . && rm -rf w
           cp /tmp/dbg/* . 2>/dev/null; git add -A && git commit -qm "textfix ${{ github.run_id }}" && git push -qf origin dbg:debug-textfix
