@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.7.4"
+VERSION = "0.7.5"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -330,6 +330,9 @@ def ensure_workers():
     """Рабочие скрипты движка копируются из программы при каждом запуске — так обновляются вместе с ней."""
     p = paths()
     p.workers.mkdir(parents=True, exist_ok=True)
+    if not os.environ.get("DZOD_APPLIO_PY"):
+        import relocate                     # папку данных перенесли — поправить среды Python движка
+        relocate.auto_repair()
     for f in WORKERS_SRC.glob("*.py"):
         dst = p.workers / f.name
         try:

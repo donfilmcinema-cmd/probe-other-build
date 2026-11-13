@@ -109,6 +109,115 @@ def fix_paths(new_root, old_root, extra_roots=()):
     return n
 
 
+def _is_link(d):
+    try:
+        return d.is_symlink() or bool(getattr(os.path, "isjunction", lambda _x: False)(str(d)))
+    except OSError:
+        return True
+
+
+def _base_python(python_dir):
+    """Настоящий Python движка (папка cpython-3.12.N-…; ссылки «cpython-3.12-…» uv после переноса битые)."""
+    best = None
+    if python_dir.is_dir():
+        for d in sorted(python_dir.iterdir()):
+            if not d.name.startswith("cpython-") or _is_link(d):
+                continue
+            exe = d / ("python.exe" if E.IS_WIN else "bin/python3")
+            if exe.exists():
+                best = exe
+    return best
+
+
+def _is_env(env):
+    return (env / "pyvenv.cfg").exists() and os.path.lexists(env / ("Scripts/python.exe" if E.IS_WIN else "bin/python"))
+
+
+def _home(env):
+    try:
+        for ln in (env / "pyvenv.cfg").read_text(encoding="utf-8").splitlines():
+            k, _, v = ln.partition("=")
+            if k.strip().lower() == "home":
+                return Path(v.strip())
+    except OSError:
+        pass
+    return None
+
+
+def stale_envs(engine):
+    """Среды Python, у которых «home» указывает в несуществующее место (папку переносили)."""
+    engine = Path(engine)
+    q = E.Paths(engine)
+    out = []
+    for env in (q.applio_env, q.sep_env, q.exec_env):
+        if _is_env(env):
+            h = _home(env)
+            if h is None or not h.exists():
+                out.append(env)
+    return out
+
+
+def repair_envs(engine, envs=None, log=E.log):
+    """Пересоздать запускающие файлы сред (python.exe uv хранит путь к Python внутри себя), библиотеки не трогаются:
+    uv venv --allow-existing. Плюс убрать битые ссылки на Python в папке движка."""
+    engine = Path(engine)
+    q = E.Paths(engine)
+    envs = envs if envs is not None else [e for e in (q.applio_env, q.sep_env, q.exec_env) if _is_env(e)]
+    if not envs:
+        return []
+    if q.python_dir.is_dir():
+        for d in q.python_dir.iterdir():
+            if _is_link(d) and not d.exists():
+                try:
+                    os.rmdir(d) if E.IS_WIN else d.unlink()
+                except OSError:
+                    pass
+    base = _base_python(q.python_dir)
+    uv = engine / "uv" / ("uv.exe" if E.IS_WIN else "uv")
+    if base is None or not uv.exists():
+        raise E.EngineError(f"Не найден Python или uv движка в {engine} — переустановите движок (вкладка «Движок»).")
+    env_vars = dict(os.environ, UV_CACHE_DIR=str(q.uv_cache), UV_PYTHON_INSTALL_DIR=str(q.python_dir),
+                    UV_NO_PROGRESS="1", PYTHONUTF8="1")
+    import subprocess
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    done = []
+    for env in envs:
+        r = subprocess.run([str(uv), "venv", "--allow-existing", "--python", str(base), str(env)], env=env_vars,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=flags)
+        py = env / ("Scripts/python.exe" if E.IS_WIN else "bin/python")
+        t = subprocess.run([str(py), "-c", "import sys; print(sys.prefix)"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", creationflags=flags)
+        ok = t.returncode == 0
+        log(f"ПЕРЕНОС: среда {env.name} в {env.parent.name}: " + ("исправлена" if ok else
+            f"НЕ ЗАПУСКАЕТСЯ: {r.stdout[-300:]} {r.stderr[-300:]} {t.stderr[-300:]}"))
+        if not ok:
+            raise E.EngineError(f"Среда Python «{env.parent.name}» после переноса не запускается — "
+                                "переустановите движок (вкладка «Движок» → «Переустановить»).")
+        done.append(str(env))
+    return done
+
+
+def auto_repair():
+    """При запуске задачи: папку перенесли (кнопкой или руками) — среды Python поправить молча."""
+    try:
+        eng = E.paths().engine
+        bad = stale_envs(eng)
+        if bad:
+            fix_paths(eng.parent, _guess_old(bad[0], eng.parent))
+            repair_envs(eng, bad)
+    except E.EngineError:
+        raise
+    except Exception as ex:  # noqa: BLE001
+        E.log(f"ПЕРЕНОС: проверка сред не удалась: {ex}")
+
+
+def _guess_old(env, new_root):
+    """Старый корень по «home» среды: …\\<корень>\\Engine\\python\\… → <корень>."""
+    h = str(_home(env) or "")
+    k = h.lower().find(os.sep + "engine" + os.sep + "python")
+    return h[:k] if k > 0 else str(new_root)
+
+
 def _sizes(src):
     total, files = 0, []
     for dp, dn, fs in os.walk(src):
@@ -194,10 +303,13 @@ def move_root(ctx, new, old=None):
             raise
     ctx.progress(0.92, "Пути движка и записей…")
     n = fix_paths(new, old, [other] if other and Path(other).is_dir() and _norm(other).lower() != new.lower() else [])
+    ctx.progress(0.94, "Среды Python движка…")
+    fixed_envs = repair_envs(Path(new) / "Engine") if (Path(new) / "Engine").is_dir() else []
     E.SETTINGS.set(root=new, migrate_declined=None)
     if how == "копирование":
         ctx.progress(0.96, "Удаление старой папки…")
         shutil.rmtree(old, ignore_errors=True)
-    E.log(f"ПЕРЕНОС ПАПКИ ДАННЫХ: {old} → {new} ({how}), исправлено файлов: {n}, {time.time() - t0:.1f} с")
+    E.log(f"ПЕРЕНОС ПАПКИ ДАННЫХ: {old} → {new} ({how}), исправлено файлов: {n}, сред: {len(fixed_envs)}, "
+          f"{time.time() - t0:.1f} с")
     ctx.progress(1.0, "Перенесено")
     return {"old": old, "new": new, "how": how, "fixed": n, "engine": E.engine_status()}
