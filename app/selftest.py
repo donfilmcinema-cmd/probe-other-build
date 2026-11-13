@@ -57,8 +57,30 @@ def run(log=print):
 
         # --- путь движка
         check("путь без пробелов принимается", E.check_root("D:\\DZOD_Vocalist") == "" or os.name != "nt")
-        check("путь с пробелом отклоняется", E.check_root("D:\\Claude Materials") != "")
+        check("путь с пробелами принимается (0.7.4)",
+              E.check_root("D:\\DZOD Studio Materials\\DZOD Vocalist") == "" or os.name != "nt")
         check("путь с кириллицей отклоняется", E.check_root("C:\\Пользователи\\x") != "")
+        check("папка по умолчанию — DZOD Studio Materials",
+              "DZOD Studio Materials" in E.default_root() and E.default_root().endswith(E.APP))
+
+        # --- перенос папки данных (13.11): старая → «…\\DZOD Studio Materials\\…», пути в записях и средах Python
+        import relocate as RL
+        import json as _json
+        old = tmp / "DZOD_Vocalist_old"
+        (old / "Engine" / "Applio" / "env").mkdir(parents=True)
+        (old / "Engine" / "Applio" / "env" / "pyvenv.cfg").write_text(
+            f"home = {old}\\Engine\\python\\cpython\nversion = 3.12\n", encoding="utf-8")
+        (old / "Voices" / "v").mkdir(parents=True)
+        (old / "Voices" / "v" / "voice.json").write_text(_json.dumps({"model": str(old / "Engine" / "m.pth")}), encoding="utf-8")
+        new = tmp / "DZOD Studio Materials" / "DZOD Vocalist"
+        rr = RL.move_root(E.Ctx(), str(new), str(old))
+        cfg = (new / "Engine" / "Applio" / "env" / "pyvenv.cfg").read_text(encoding="utf-8")
+        vj = _json.loads((new / "Voices" / "v" / "voice.json").read_text(encoding="utf-8"))
+        check("перенос: старой папки нет, новая есть", not old.exists() and new.is_dir(), rr["how"])
+        check("перенос: pyvenv.cfg и запись голоса смотрят в новую папку",
+              str(new) in cfg and vj["model"].startswith(str(new)), cfg.splitlines()[0] + " | " + vj["model"])
+        check("перенос: программа переключилась", E.SETTINGS.get("root") == str(new))
+        E.SETTINGS.set(root=None)
 
         # --- звук: частота, длина, громкость
         sr = 48000

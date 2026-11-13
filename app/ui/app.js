@@ -1442,7 +1442,7 @@ function renderEngine() {
   pill.className = 'state-pill ' + (e.ready ? 'ok' : 'warn');
   pill.textContent = e.ready ? '✓ Движок готов' : 'Движок не установлен';
   if (document.activeElement !== $('root')) $('root').value = e.root;
-  $('root-note').innerHTML = e.root_ok ? 'Одна папка для всего: движок, голоса и песни. Путь — без пробелов и русских букв.'
+  $('root-note').innerHTML = e.root_ok ? 'Одна папка для всего: движок, голоса и песни. Пробелы в пути можно, русские буквы — нет. Новая папка — «Перенести» переносит всё.'
     : '<span class="warn">Папка не подходит: ' + esc(e.root_problem) + '</span>';
   $('eng-free').textContent = e.free_gb != null ? `свободно на диске: ${Math.round(e.free_gb)} ГБ` : '';
   $('eng-steps').innerHTML = e.steps.map((st, k) => `<div class="step ${st.done ? 'done' : ''}"><i>${st.done ? '✓' : k + 1}</i>
@@ -1495,13 +1495,31 @@ function renderSepModels() {
 $('sep-dl').onclick = async () => { if (await needEngine()) startJob(() => api('sep_download')); };
 $('root-pick').onclick = async () => { const p = await pick('folder'); if (p) $('root').value = p; };
 $('root-set').onclick = async () => {
-  const path = $('root').value.trim();
-  if (S.info.engine.ready && path !== S.info.engine.root) {
-    if (!(await modal({ title: 'Сменить папку?', text: 'Движок, песни и голоса в старой папке останутся там. В новой папке движок нужно будет установить заново (или перенесите папку целиком и укажите её).', ok: 'Сменить' }))) return;
+  const path = $('root').value.trim().replace(/[\\/]+$/, '');
+  const cur = (S.info.engine.root || '').replace(/[\\/]+$/, '');
+  if (!path || path.toLowerCase() === cur.toLowerCase()) return;
+  // 0.7.4: папку данных можно перенести целиком (движок, голоса, песни) — всё работает как раньше
+  const has = S.info.engine.ready || S.info.engine.has_data;
+  if (has) {
+    const v = await modal({ title: 'Папка данных', html: `Перенести всё (движок, голоса, песни) из<br><span class="mono">${esc(cur)}</span><br>в<br><span class="mono">${esc(path)}</span>?<br><br>На том же диске — мгновенно. На другом — копирование с ходом и отменой, потом старая папка удаляется.`, ok: 'Перенести', cancel: 'Отмена' });
+    if (!v) return;
+    return moveRoot(path);
   }
   const r = await safe(() => api('set_root', { path }));
-  if (r) { S.info.engine = r; renderEngine(); toast('Папка программы: ' + r.root); loadSongs(); }
+  if (r) { S.info.engine = r; renderEngine(); toast('Папка данных: ' + r.root); loadSongs(); }
 };
+async function moveRoot(path) {
+  const r = await safe(() => api('move_root', { path }));
+  if (!r) return;
+  S.jobSeen = 0;
+  pollJob(true);
+}
+async function offerMigration() {
+  const m = S.info.migrate;
+  if (!m || m.declined || S.info.studio) return;
+  const go = await modal({ title: 'Новое место папки данных', html: `Материалы DZOD теперь собираются в <span class="mono">D:\\DZOD Studio Materials</span>.<br><br>Перенести папку данных (движок, голоса, песни) из<br><span class="mono">${esc(m.old)}</span><br>в<br><span class="mono">${esc(m.new)}</span>?<br><br>Тот же диск — перенос мгновенный, ничего не скачивается заново. Перед переносом закройте ${S.info.flavor === 'revoicer' ? 'DZOD Vocalist' : 'DZOD Revoicer'} и DZOD Studio.<br>Можно и позже: «Папка данных…».`, ok: 'Перенести', cancel: 'Не сейчас' });
+  if (go) moveRoot(m.new); else api('migrate_decline').catch(() => {});
+}
 $('eng-install').onclick = () => startJob(() => api('install', {}));
 $('eng-reinstall').onclick = async () => {
   if (!(await modal({ title: 'Переустановить движок?', text: 'Библиотеки будут скачаны заново (модели голоса и чистки сохранятся). Песни и голоса не пострадают.', ok: 'Переустановить' }))) return;
@@ -1606,6 +1624,10 @@ async function jobFinished(j) {
   if (j.state === 'done') {
     const r = j.result || {};
     if (j.kind === 'install') { toast('Движок установлен. Дальше — шаг 2 «Голос».'); await loadEngine(); }
+    if (j.kind === 'move_root') {
+      S.info = await api('info'); renderStatus(); await loadEngine(); renderEngine(); loadSongs(); await loadVoiceSelect();
+      toast('Папка данных перенесена: ' + r.new);
+    }
     if (j.kind === 'models') { toast('Нейросети чистки скачаны.'); await loadSepModels(); renderEngine(); cleanDlNote(); }
     if (j.kind === 'clean' && r.id) {
       loadSepModels().then(cleanDlNote);
@@ -1932,6 +1954,7 @@ async function boot() {
   await loadSepModels();
   renderEngine();
   await loadVoiceSelect();
+  setTimeout(offerMigration, 400);
   // окно из Studio: Studio может заранее выбрать вокалиста и ручки (Revoice this Line…)
   const pre = S.info.studio && S.info.studio.preselect;
   if (pre) {

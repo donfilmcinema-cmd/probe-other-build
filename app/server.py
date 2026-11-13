@@ -158,7 +158,7 @@ class App:
             return {"version": E.VERSION, "app": E.APP, "flavor": E.FLAVOR,
                     "studio": self.session.view() if self.session else None,
                     "dialogs": self.picker is not None, "settings": E.SETTINGS.d,
-                    "engine": E.engine_status(), "default_root": E.default_root(),
+                    "engine": E.engine_status(), "default_root": E.default_root(), "migrate": E.migration_offer(),
                     "log": str(E.log_path()), "job": self.job_view()}
         if name == "ping":
             self.last_ping = time.time()
@@ -223,6 +223,16 @@ class App:
             Path(path).mkdir(parents=True, exist_ok=True)
             E.SETTINGS.set(root=path)
             return E.engine_status()
+        if name == "move_root":
+            import relocate as RL
+            path = str(b.get("path") or "").strip().rstrip("\\/")
+            problem = RL.check_target(path, str(E.root()))
+            if problem:
+                raise E.EngineError(problem)
+            return self.start_job("move_root", "Перенос папки данных", lambda ctx: RL.move_root(ctx, path))
+        if name == "migrate_decline":
+            E.SETTINGS.set(migrate_declined=E.legacy_root())
+            return {"ok": True}
         if name == "sep_models":
             return {"models": E.sep_models_status(), "folders": E.folder_sizes()}
         if name == "sep_download":

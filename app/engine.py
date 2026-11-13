@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.7.3"
+VERSION = "0.7.4"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -138,28 +138,74 @@ class Settings:
 SETTINGS = Settings()
 
 
-def default_root():
+MATERIALS = "DZOD Studio Materials"      # общая папка материалов DZOD у автора (13.11)
+
+
+def _drive():
+    return "D:\\" if os.path.isdir("D:\\") else "C:\\"
+
+
+def default_root(app=None):
+    """Папка данных по умолчанию: D:\\DZOD Studio Materials\\DZOD Vocalist (DZOD Revoicer)."""
+    app = app or APP
     if IS_WIN:
-        return f"D:\\{ROOT_NAME}" if os.path.isdir("D:\\") else f"C:\\{ROOT_NAME}"
-    return str(Path.home() / ROOT_NAME)
+        return _drive() + MATERIALS + "\\" + app
+    return str(Path.home() / MATERIALS / app)
+
+
+def legacy_root(app=None):
+    """Прежняя папка по умолчанию (до 0.7.4): D:\\DZOD_Vocalist / D:\\DZOD_Revoicer."""
+    name = (app or APP).replace(" ", "_")
+    if IS_WIN:
+        return _drive() + name
+    return str(Path.home() / name)
+
+
+def _has_data(d):
+    d = Path(d)
+    return d.is_dir() and any((d / x).exists() for x in ("Engine", "Voices", "Songs"))
+
+
+def _pick_root(env_root, saved, app=None):
+    if env_root:
+        return env_root
+    if saved:
+        return saved
+    # ещё не перенесено: читаем старое место, пока автор не перенёс
+    if _has_data(legacy_root(app)) and not _has_data(default_root(app)):
+        return legacy_root(app)
+    return default_root(app)
 
 
 def check_root(path):
-    """Корень должен быть без пробелов и русских букв — этого требуют модели движка."""
+    """Пробелы в пути можно (0.7.4, «D:\\DZOD Studio Materials»). Русские буквы — нельзя:
+    часть библиотек движка (индекс голоса faiss, звук libsndfile) на Windows открывает такие пути ненадёжно."""
     p = str(path or "").strip()
     if not p:
         return "Укажите папку."
     if not os.path.isabs(p):
-        return f"Нужен полный путь, например D:\\{ROOT_NAME}."
+        return f"Нужен полный путь, например {default_root()}."
     if any(ord(c) > 127 for c in p):
-        return "В пути не должно быть русских букв — движок с такими путями работает ненадёжно."
-    if " " in p:
-        return "В пути не должно быть пробелов — движок с такими путями работает ненадёжно."
+        return "В пути не должно быть русских букв — часть библиотек движка открывает такие пути ненадёжно."
+    if len(p) > 120:
+        return "Слишком длинный путь — внутри движка пути ещё длиннее, Windows их не откроет. Выберите путь короче."
     return ""
 
 
 def root():
-    return Path(os.environ.get("DZOD_ROOT") or SETTINGS.get("root") or default_root())
+    return Path(_pick_root(os.environ.get("DZOD_ROOT"), SETTINGS.get("root")))
+
+
+def migration_offer():
+    """Перенос из старого места: сохранена старая папка (или не сохранено ничего), данные лежат там, а нового места нет."""
+    if os.environ.get("DZOD_ROOT"):
+        return None
+    cur, old, new = str(root()), legacy_root(), default_root()
+    if cur.rstrip("\\/").lower() != old.lower() or not _has_data(old) or _has_data(new):
+        return None
+    if SETTINGS.get("migrate_declined") == old:
+        return {"old": old, "new": new, "declined": True}
+    return {"old": old, "new": new}
 
 
 def songs_dir():
@@ -177,18 +223,15 @@ def voices_dir():
 # ---------------------------------------------------------------- пути движка
 
 def other_root():
-    """Папка второй программы (DZOD Vocalist ↔ DZOD Revoicer): из её настроек, иначе — её папка по умолчанию."""
+    """Папка второй программы (DZOD Vocalist ↔ DZOD Revoicer): из её настроек, иначе — как выбрала бы она сама."""
     other_app = "DZOD Vocalist" if REVOICER else "DZOD Revoicer"
-    other_name = "DZOD_Vocalist" if REVOICER else "DZOD_Revoicer"
     base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".local" / "share")
     r = None
     try:
         r = json.loads((Path(base) / other_app / "settings.json").read_text(encoding="utf-8")).get("root")
     except Exception:  # noqa: BLE001
         pass
-    if not r:
-        r = default_root().replace(ROOT_NAME, other_name)
-    return Path(r)
+    return Path(_pick_root(None, r, other_app))
 
 
 def _engine_ready_in(e):
@@ -611,6 +654,7 @@ def engine_status():
         "gpu": st.get("gpu"), "free_gb": disk_free_gb(root()),
         "applio": applio_ok, "sep": sep_ok,
         "shared": p.shared_engine,          # движок второй программы (общий), иначе None
+        "has_data": _has_data(root()),
     }
 
 

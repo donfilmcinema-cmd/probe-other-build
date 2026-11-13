@@ -51,7 +51,7 @@ jobs:
           pyinstaller --noconfirm --clean --windowed --name "DZOD Vocalist"
           --icon assets/icon.ico --version-file version_info.txt
           --paths app --add-data "app/ui;ui" --add-data "app/workers;workers"
-          --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import textfix --hidden-import psutil
+          --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import textfix --hidden-import relocate --hidden-import psutil
           --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL
           --exclude-module IPython --exclude-module pytest
           app/main.py
@@ -64,7 +64,7 @@ jobs:
           pyinstaller --noconfirm --clean --windowed --name "DZOD Revoicer" `
             --icon assets/icon.ico --version-file version_info_rv.txt `
             --paths app --add-data "app/ui;ui" --add-data "app/workers;workers" --add-data "flavor_build/flavor.txt;." `
-            --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import textfix --hidden-import psutil `
+            --hidden-import selftest --hidden-import songs --hidden-import voices --hidden-import audio --hidden-import core --hidden-import revoicer --hidden-import executor --hidden-import textfix --hidden-import relocate --hidden-import psutil `
             --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL `
             --exclude-module IPython --exclude-module pytest `
             app/main.py
@@ -146,6 +146,7 @@ jobs:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: utf-8
       DZOD_ROOT: C:\dzv
+      DZOD_TEST_MOVE: C:\DZOD Studio Materials\DZOD Vocalist
       DZOD_CPU_TORCH: "1"
     steps:
       - uses: actions/checkout@v4

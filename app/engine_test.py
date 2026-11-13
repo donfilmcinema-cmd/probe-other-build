@@ -101,6 +101,37 @@ def main():
         x, sr = A.read(t["path"], mono=True)
         check(f"перепевка: {t['part']} не тишина", A.active_rms(x[:, 0], sr) > 1e-4)
 
+    # перенос папки данных в путь с пробелами (13.11, автор: «D:\\DZOD Studio Materials»): дальше всё — в новой папке
+    mv = os.environ.get("DZOD_TEST_MOVE")
+    if mv:
+        import json as _j
+        import numpy as _np
+        import relocate as RL
+        old_root = str(E.root())
+        before, _ = A.read(takes[0]["path"], mono=True)
+        n_voices = len(V.list_voices()) if hasattr(V, "list_voices") else None
+        r = step(f"Перенос папки данных → {mv}", lambda: RL.move_root(ctx(), mv))
+        os.environ["DZOD_ROOT"] = mv                       # в проверке корень задан переменной — переключаем и её
+        check("перенос: старой папки нет, новая есть", not Path(old_root).exists() and Path(mv).is_dir(), str(r)[:300])
+        cfgs = list((Path(mv) / "Engine").rglob("pyvenv.cfg"))
+        check("перенос: среды Python смотрят в новую папку",
+              cfgs and all(old_root.lower() not in c.read_text(encoding="utf-8").lower() for c in cfgs), str(cfgs))
+        st2 = E.engine_status()
+        check("перенос: движок готов в новой папке", st2["ready"], str(st2["steps"]))
+        check("перенос: голос на месте", V.get(slug).view(full=True)["has_model"])
+        if n_voices is not None:
+            check("перенос: голосов столько же", len(V.list_voices()) == n_voices)
+        conv2 = step("Перепевка после переноса (путь с пробелами)",
+                     lambda: S.convert(ctx(), song.id, slug, {"index_rate": 0.6}, ("lead",)))
+        after, _ = A.read(conv2["takes"][0]["path"], mono=True)
+        m_ = min(len(before), len(after))
+        cc = float(_np.corrcoef(before[:m_, 0], after[:m_, 0])[0, 1])
+        check("перенос: звук тот же (корреляция с дублем до переноса ≥ 0,98)", cc >= 0.98, f"{cc:.4f}")
+        step("Обучение после переноса: 1 эпоха (путь с пробелами)",
+             lambda: V.train(ctx(), slug, {"sample_rate": 40000, "epochs": 1, "save_every": 1, "batch": 2, "fresh": True}))
+        cks = V.checkpoints(slug)
+        check("обучение после переноса: эпоха сохранена", len(cks) >= 1, ", ".join(c["file"] for c in cks))
+
     cmp_ = step("Сравнение эпох", lambda: V.compare(ctx(), slug, roles["lead"], [c["file"] for c in cks]))
     check("сравнение: по файлу на эпоху", len(cmp_["items"]) == len(cks), str(cmp_["items"]))
     if cks:
