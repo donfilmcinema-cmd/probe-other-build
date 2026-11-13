@@ -112,6 +112,8 @@ def main():
         n_voices = len(V.list_voices()) if hasattr(V, "list_voices") else None
         r = step(f"Перенос папки данных → {mv}", lambda: RL.move_root(ctx(), mv))
         os.environ["DZOD_ROOT"] = mv                       # в проверке корень задан переменной — переключаем и её
+        # пути, запомненные самой проверкой до переноса, — тоже в новую папку (программа берёт их из записей)
+        roles = {k: (mv + v[len(old_root):]) if v.lower().startswith(old_root.lower()) else v for k, v in roles.items()}
         check("перенос: старой папки нет, новая есть", not Path(old_root).exists() and Path(mv).is_dir(), str(r)[:300])
         cfgs = list((Path(mv) / "Engine").rglob("pyvenv.cfg"))
         check("перенос: среды Python смотрят в новую папку",
