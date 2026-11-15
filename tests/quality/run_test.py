@@ -94,7 +94,8 @@ RES["bad"] = r2["checks"]
 RES["bad_problems"] = r2["problems"]
 hb1, hb2 = word_t(r1, "here"), word_t(r2, "here")
 checks2 = {
-    "wish_found_as_problem": any(p["word"] == "wish" for p in r2["problems"]) or (
+    # «wish» съедено: в списке слов дубля (или «и в исходнике», если распознавание не взяло его и там)
+    "wish_found_as_problem": any(p["word"] == "wish" for p in r2["problems"] + r2["problems_also_in_source"]) or (
         (r2["checks"]["wer"]["take"] or 0) > (r1["checks"]["wer"]["take"] or 0)),
     "here_dull": bool(hb1 and hb2 and hb1["ratio"] and hb2["ratio"] is not None and hb2["ratio"] < 0.6 * hb1["ratio"]),
     "clicks_seen": r2["checks"]["clicks"]["count"] >= 2 and r2["checks"]["clicks"]["count"] > r1["checks"]["clicks"]["count"],

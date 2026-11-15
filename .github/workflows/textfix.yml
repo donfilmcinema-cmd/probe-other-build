@@ -67,8 +67,8 @@ jobs:
           w/venv_test/bin/python tests/textfix/run_test.py w
       - name: Мерило качества (0.8.0)
         run: |
-          w/venv_exec/bin/python -c "from huggingface_hub import snapshot_download as d; d('openai/whisper-base', local_dir='w/whisper-base', allow_patterns=['*.json','*.txt','model.safetensors'])"
-          w/venv_test/bin/python tests/quality/run_test.py w w/whisper-base
+          w/venv_exec/bin/python -c "from huggingface_hub import snapshot_download as d; d('openai/whisper-small', local_dir='w/whisper-small', allow_patterns=['*.json','*.txt','model.safetensors'])"
+          w/venv_test/bin/python tests/quality/run_test.py w w/whisper-small
       - name: Результат — в ветку debug-textfix
         if: always()
         run: |
