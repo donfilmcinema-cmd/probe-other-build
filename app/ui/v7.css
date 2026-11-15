@@ -279,3 +279,15 @@
 #pop-conv .v7-row { flex-wrap: wrap; }
 #pop-conv .v7-chk { min-width: 0; }
 #pop-conv .v7-chk span { overflow-wrap: anywhere; }
+
+/* 0.8.0 — «Качество» дубля */
+.q-btn.ok { color: #8fd39a; } .q-btn.bad { color: #e8857b; }
+#modal .q-rep { max-height: 62vh; overflow: auto; min-width: min(760px, 86vw); text-align: left; }
+.q-head { font: 700 13px var(--v7-n); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+.q-head.ok { background: rgba(110,190,120,.15); color: #8fd39a; } .q-head.bad { background: rgba(220,90,80,.15); color: #e8857b; }
+.q-t { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 6px; }
+.q-t td { padding: 3px 6px; border-bottom: 1px solid var(--v7-ln); vertical-align: middle; }
+.q-t td:last-child { white-space: nowrap; text-align: right; } .q-t .q-tg { color: #8d887f; }
+.q-ok { color: #8fd39a; } .q-bad { color: #e8857b; }
+.q-rep h6 { margin: 10px 0 4px; font: 700 11px var(--v7-n); letter-spacing: .08em; color: #b9b4ac; text-transform: uppercase; }
+.q-rep .v7-btn.sm { height: 22px; padding: 0 7px; margin-left: 4px; }

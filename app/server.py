@@ -303,6 +303,12 @@ class App:
             return self.start_job("text", "Исправление по тексту",
                                   lambda ctx: S.text_fix(ctx, b["id"], b["take"], b.get("lyrics"), b.get("marks") or [],
                                                          b.get("language") or "auto"))
+        if name == "take_quality":
+            # мерило дубля (0.8.0): разборчивость, яркость, динамика, артефакты
+            return self.start_job("quality", "Проверка качества",
+                                  lambda ctx: S.take_quality(ctx, b["id"], b["take"], b.get("lyrics")))
+        if name == "take_quality_report":
+            return {"report": S.take_quality_report(b["id"], b["take"])}
         if name == "song_clear":
             return S.clear(b["id"], b.get("what"))
         if name == "take_place":

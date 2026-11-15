@@ -166,10 +166,11 @@ def set_kind(song_id, kind):
 
 
 def _drop_parts(s, t):
-    """Папка промежуточных файлов «Перепевки с текстом» рядом с дублем — уходит вместе с дублем."""
+    """Папка промежуточных файлов «Перепевки с текстом» и отчёт качества рядом с дублем — уходят вместе с дублем."""
     d = s.dir / (Path(t["file"]).stem + " - части")
     if d.is_dir():
         shutil.rmtree(d, ignore_errors=True)
+    (s.dir / (Path(t["file"]).stem + " - качество.json")).unlink(missing_ok=True)
 
 
 def delete_take(song_id, take_id):
@@ -422,3 +423,41 @@ def text_fix(ctx, song_id, take_id, lyrics, marks, language="auto"):
     v["parts"] = r.get("parts")
     v["fixed_from"] = t["id"]
     return v
+
+
+def take_quality(ctx, song_id, take_id, lyrics=None):
+    """Мерило дубля (0.8.0): исходник против дубля, текст песни — если введён. Итог — в запись дубля, отчёт — файлом."""
+    import quality as Q
+    s = get(song_id)
+    if lyrics is not None:
+        s.m["lyrics"] = lyrics
+        s.save()
+    t, src = _take(s, take_id)
+    tmp = E.new_tmp("qs")
+    try:
+        inp = tmp / "src.wav"
+        A.to_wav(src, inp, mono=True)
+        rep = Q.measure(ctx, inp, s.dir / t["file"], s.m.get("lyrics", ""), out=Q.report_path(s.dir / t["file"]))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    s = get(song_id)
+    for x in s.m.get("takes", []):
+        if x["id"] == take_id:
+            x["quality"] = Q.summary(rep)
+    s.save()
+    v = s.view()
+    v["quality_take"] = take_id
+    v["quality"] = rep
+    return v
+
+
+def take_quality_report(song_id, take_id):
+    import quality as Q
+    s = get(song_id)
+    t = next((t for t in s.m.get("takes", []) if t["id"] == take_id), None)
+    if not t:
+        raise E.EngineError("Дубль не найден.")
+    f = Q.report_path(s.dir / t["file"])
+    if not f.exists():
+        return None
+    return json.loads(f.read_text(encoding="utf-8"))

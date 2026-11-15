@@ -43,7 +43,7 @@ import songs as S
 import voices as V
 
 API_VERSION = 2                       # 1 и 2 (sing v2: params/styles/curves/range); старше — «обновите»
-ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe", "text_analyze", "revoice_text")
+ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe", "text_analyze", "revoice_text", "quality")
 
 
 def _progress_writer(path):
@@ -150,6 +150,16 @@ def process(ctx, req):
                 "changed": r["changed"], "checks": r.get("checks", []),
                 "skipped": [q for q in r.get("quality", []) if q.get("skip")], "parts": r.get("parts"),
                 "seconds": r["seconds"]}
+    if action == "quality":
+        # мерило дубля: {"input": исходник, "take": дубль, "lyrics": "…"?, "language": "auto", "output": json?}
+        import quality as Q
+        for k in ("input", "take"):
+            if not req.get(k):
+                raise E.EngineError(f"Нет поля «{k}».")
+        rep = Q.measure(ctx, req["input"], req["take"], req.get("lyrics") or "", req.get("language") or "auto",
+                        req.get("output"))
+        return {"ok": True, "report": str(req.get("output") or Q.report_path(req["take"])),
+                "passed": rep["passed"], "checks": rep["checks"], "problems": rep["problems"]}
     if action == "sing":
         # DZOD Executor (E1): {"midi": "...mid", "voice": "<код голоса>", "convert": {...}, "output_dir": "..."}
         import executor as X

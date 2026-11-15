@@ -279,6 +279,18 @@ def run(log=print):
         import core as C
         check("Перепевка с текстом: модуль, рабочий файл и действия запроса на месте",
               (E.WORKERS_SRC / "textfix_worker.py").exists() and "revoice_text" in C.ACTIONS and "text_analyze" in C.ACTIONS)
+        import quality as Q
+        import importlib.util as _iu
+        _sp = _iu.spec_from_file_location("quality_worker", str(E.WORKERS_SRC / "quality_worker.py"))
+        _QW = _iu.module_from_spec(_sp)
+        _sp.loader.exec_module(_QW)
+        check("мерило: модуль и запрос quality", "quality" in C.ACTIONS and (E.WORKERS_SRC / "quality_worker.py").exists())
+        check("мерило: WER — «съедено» и «искажено»",
+              _QW.wer(["i", "wish", "you", "were", "here"], ["i", "you", "where", "here"]) == 40.0
+              and [o[0] for o in _QW.edit_ops(["a", "b", "c"], ["a", "x"])] in (["ok", "sub", "del"], ["ok", "del", "sub"]))
+        check("мерило: текст нормализуется (ё, апострофы, метки частей)",
+              _QW.norm_words("[Chorus] Ёлка, you’re HERE!") == ["елка", "you're", "here"])
+        check("мерило: отчёт — рядом с дублем", Q.report_path(Path("C:/x/дубль 01.wav")).name == "дубль 01 - качество.json")
 
         # --- состояние движка (он здесь не установлен)
         es = E.engine_status()

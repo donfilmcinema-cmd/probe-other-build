@@ -598,6 +598,12 @@ function renderTakes() {
       tx.onclick = () => openText(t);
       acts.appendChild(tx);
     }
+    {
+      const q = t.quality;
+      const qb = el(`<button class="v7-btn sm q-btn ${q ? (q.passed ? 'ok' : 'bad') : ''}" title="Мерило дубля: разборчивость (распознавание слов), яркость согласных, динамика, щелчки — против исходника и текста песни">${q ? (q.passed ? '✓ Качество' : '✗ Качество') : 'Качество'}</button>`);
+      qb.onclick = () => q ? showQuality(s, t) : runQuality(s, t);
+      acts.appendChild(qb);
+    }
     if (S.info && S.info.studio) {
       const ins = el('<button class="v7-btn sm go insert" title="Файл ляжет рядом с исходником и встанет новой Line под исходной, с той же позиции">В Studio</button>');
       ins.onclick = async () => {
@@ -627,6 +633,66 @@ function renderTakes() {
     acts.appendChild(more);
     box.appendChild(row);
   }
+}
+/* ---------- КАЧЕСТВО (0.8.0): мерило дубля ---------- */
+function autoQuality() { try { return localStorage.getItem('dzod.autoQuality') !== '0'; } catch (e) { return true; } }
+{
+  const cb = document.getElementById('v-autoq');
+  if (cb) { cb.checked = autoQuality(); cb.onchange = () => { try { localStorage.setItem('dzod.autoQuality', cb.checked ? '1' : '0'); } catch (e) { /* нет хранилища */ } }; }
+}
+async function runQuality(s, t) {
+  const ex = await api('exec_status').catch(() => null);
+  if (ex && !ex.ready) {
+    toast('Для проверки качества нужен Executor (шаг 4 → «Установить»): в нём распознавание речи.', true); return;
+  }
+  const r = await safe(() => api('take_quality', { id: s.id, take: t.id }));
+  if (r) { S.jobSeen = 0; pollJob(true); }
+}
+async function playSpan(id, path, a, b) {
+  const pk = await peaksOf(path, 0).catch(() => null);
+  const dur = pk ? pk.seconds : 0;
+  Player.stop();
+  if (dur) await Player.seek(id, Math.max(0, a) / dur, media(path, 0), null);
+  await Player.toggle(id, media(path, 0), null);
+  clearTimeout(S.qStop);
+  S.qStop = setTimeout(() => { const st = Player.state(); if (st.id === id && st.playing) Player.pause(); }, (b - a) * 1000 + 200);
+}
+async function showQuality(s, t, rep) {
+  if (!rep) { const r = await safe(() => api('take_quality_report', { id: s.id, take: t.id })); rep = r && r.report; }
+  if (!rep) return runQuality(s, t);
+  const c = rep.checks, T = rep.target;
+  const mk = ok => ok ? '<b class="q-ok">✓</b>' : '<b class="q-bad">✗</b>';
+  const pc = v => v == null ? '—' : Math.round(v * 100) + '%';
+  const rows = [
+    [c.wer.ok, 'Разборчивость (WER)', `${c.wer.take ?? '—'} % · исходник ${c.wer.source ?? '—'} % · против: ${esc(c.wer.against)}`, `≤ исходник + ${T.wer_pp} п.п.`],
+    [c.brightness.ok, 'Яркость слов (>2 кГц)', `${pc(c.brightness.median_ratio)} от исходника (медиана по словам)`, `≥ ${Math.round(T.bright * 100)}%`],
+    [c.dynamics.ok, 'Динамика (огибающая 20 мс)', `${c.dynamics.median_db ?? '—'} дБ · p90 ${c.dynamics.p90_db ?? '—'} дБ`, `≤ ${T.env_db} дБ`],
+    [c.clicks.ok, 'Щелчки', `${c.clicks.count}`, '0'],
+  ];
+  const src = (s.files.find(f => f.name === t.from) || {}).path || (s.dir + '\\' + t.from);
+  const tm = v => v == null ? '?' : v.toFixed(1) + ' с';
+  const span = (x, i, kind) => x.t0 == null ? '' : `<button class="v7-btn sm" data-q="${kind}" data-i="${i}">▶ дубль</button><button class="v7-btn sm" data-q="${kind}s" data-i="${i}">▶ исходник</button>`;
+  const probs = rep.problems.map((p, i) => `<tr><td>${tm(p.t0)}</td><td><b>${esc(p.word)}</b></td><td>${p.kind}${p.heard ? ' → «' + esc(p.heard) + '»' : ''}</td><td>${span(p, i, 'p')}</td></tr>`).join('');
+  const worst = (rep.brightness_worst || []).filter(b => b.ratio != null && b.ratio < T.bright).map((b, i) => `<tr><td>${tm(b.t0)}</td><td><b>${esc(b.word)}</b></td><td>${pc(b.ratio)} (${pc(b.take_hf2k)} / ${pc(b.src_hf2k)})</td><td>${span(b, i, 'b')}</td></tr>`).join('');
+  const arts = [...(rep.clicks || []).map(x => ({ t0: x.t, t1: x.t + 0.05, k: 'щелчок' })), ...(rep.bursts || []).map(x => ({ t0: x.t, t1: x.t + x.dur, k: 'всплеск ВЧ' }))].sort((a, b) => a.t0 - b.t0);
+  const artRows = arts.slice(0, 30).map((a, i) => `<tr><td>${tm(a.t0)}</td><td>${a.k}</td><td></td><td>${span(a, i, 'a')}</td></tr>`).join('');
+  const html = `<div class="q-rep">
+    <div class="q-head ${rep.passed ? 'ok' : 'bad'}">${rep.passed ? 'Цели приёмки выполнены' : 'Не все цели выполнены'} · дубль ${String(t.num).padStart(2, '0')} · ${fmtTime(rep.seconds)} · проверка ${rep.time_s} с</div>
+    <table class="q-t">${rows.map(r => `<tr><td>${mk(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td><td class="q-tg">цель ${r[3]}</td></tr>`).join('')}</table>
+    ${probs ? `<h6>Слова: съедено / искажено (${rep.problems.length})</h6><table class="q-t">${probs}</table>` : '<h6>Слова: все распознаны как в ' + (c.wer.against === 'текст автора' ? 'тексте' : 'исходнике') + '</h6>'}
+    ${(rep.problems_also_in_source || []).length ? `<p class="v7-note">Ещё ${rep.problems_also_in_source.length} сл. не распознаны и в исходнике — не в счёт дубля.</p>` : ''}
+    ${worst ? `<h6>Тусклые слова (согласные потерялись)</h6><table class="q-t">${worst}</table>` : ''}
+    ${artRows ? `<h6>Артефакты (${arts.length})</h6><table class="q-t">${artRows}</table>` : ''}
+    <p class="v7-note">«Металл» (плоскость спектра, дубль / исходник): ${rep.metal_ratio ?? '—'}. ${c.wer.against === 'текст автора' ? '' : 'Введите текст песни (кнопка «Текст») — разборчивость будет считаться против него.'}</p>
+    <details><summary>Распознано</summary><p class="v7-note"><b>Исходник:</b> ${esc(rep.asr_source)}</p><p class="v7-note"><b>Дубль:</b> ${esc(rep.asr_take)}</p></details>
+    <p class="v7-note">Отчёт: ${esc((t.path || '').replace(/\.wav$/i, '') + ' - качество.json')}</p></div>`;
+  const pending = modal({ title: 'Качество дубля', html, ok: 'Проверить заново', cancel: 'Закрыть' });
+  const lists = { p: rep.problems, b: (rep.brightness_worst || []).filter(b => b.ratio != null && b.ratio < T.bright), a: arts };
+  $('m-text').querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+    const k = b.dataset.q, own = k.length === 1, x = lists[k[0]][+b.dataset.i];
+    playSpan('q_' + k + b.dataset.i, own ? t.path : src, Math.max(0, x.t0 - 0.4), (x.t1 || x.t0) + 0.4);
+  });
+  if (await pending) runQuality(s, t);
 }
 /* A/B для дублей: переключает играющий дубль между исходником и дублем без остановки */
 $('takes-ab').querySelectorAll('button').forEach(b => b.onclick = () => {
@@ -1636,11 +1702,25 @@ async function jobFinished(j) {
       loadSongs();
     }
     if (j.kind === 'text') txJobDone(j);
+    if (j.kind === 'quality' && r.id) {
+      if (S.song && S.song.id === r.id) {
+        S.song = r; renderSong();
+        const t = (r.takes || []).find(x => x.id === r.quality_take);
+        if (t) showQuality(r, t, r.quality);
+      }
+    }
     if (j.kind === 'convert' && r.id) {
       (r.made || []).forEach(x => S.newTakes.add(x));
       if (S.song && S.song.id === r.id) { S.song = r; renderSong(); }
       loadSongs();
       toast('Перепевка готова. Сравните «Исходник / DZOD» клавишей Tab.');
+      // мерило сразу после перепевки (настройка в «Перепевка — подробно»)
+      if (autoQuality() && (r.made || []).length) {
+        api('exec_status').then(ex => {
+          const t = (r.takes || []).find(x => x.id === r.made[0]);
+          if (ex && ex.ready && t) runQuality(r, t);
+        }).catch(() => {});
+      }
     }
     if (j.kind === 'sources' && r.slug) { await loadPhrases(); S.phFilter = 'new'; segSet('ph-filter', 'new'); S.phCur = 0; await openVoice(r.slug); loadVoices(); toast(`Добавлено фраз: ${r.added}` + (r.kept != null ? ` (сразу оставлено: ${r.kept}, выброшено: ${r.dropped})` : '') + '. Отберите лучшие.'); }
     if (j.kind === 'train' && r.slug) { await openVoice(r.slug); loadVoices(); loadVoiceSelect(); toast('Обучение закончено. Выберите лучшую эпоху на шаге 3 «Эпохи».'); }
