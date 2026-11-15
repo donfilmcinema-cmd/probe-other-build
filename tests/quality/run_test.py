@@ -92,12 +92,16 @@ sf.write(bad, z, sr, subtype="FLOAT")
 r2 = measure(src, bad, "bad")
 RES["bad"] = r2["checks"]
 RES["bad_problems"] = r2["problems"]
+RES["here_words"] = {"take": hb1 if 'hb1' in dir() else None}
 hb1, hb2 = word_t(r1, "here"), word_t(r2, "here")
+RES["here_words"] = {"take": hb1, "bad": hb2}
 checks2 = {
     # «wish» съедено: в списке слов дубля (или «и в исходнике», если распознавание не взяло его и там)
     "wish_found_as_problem": any(p["word"] == "wish" for p in r2["problems"] + r2["problems_also_in_source"]) or (
         (r2["checks"]["wer"]["take"] or 0) > (r1["checks"]["wer"]["take"] or 0)),
-    "here_dull": bool(hb1 and hb2 and hb1["ratio"] and hb2["ratio"] is not None and hb2["ratio"] < 0.6 * hb1["ratio"]),
+    # «here» после фильтра 1,5 кГц: доля >2 кГц в дубле падает (сравнение долей, а не отношений — у тёмного слова
+    # исходника отношение не считается)
+    "here_dull": bool(hb1 and hb2 and hb1["take_hf2k"] > 0 and hb2["take_hf2k"] < 0.6 * hb1["take_hf2k"]),
     "clicks_seen": r2["checks"]["clicks"]["count"] >= 2 and r2["checks"]["clicks"]["count"] > r1["checks"]["clicks"]["count"],
     "dynamics_worse": (r2["checks"]["dynamics"]["median_db"] or 0) > (r1["checks"]["dynamics"]["median_db"] or 0) + 0.5
                       and (r2["checks"]["dynamics"]["p90_db"] or 0) > (r1["checks"]["dynamics"]["p90_db"] or 0) + 1.5,
