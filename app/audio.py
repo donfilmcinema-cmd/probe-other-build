@@ -264,3 +264,42 @@ def note_name(hz):
     n = int(round(12 * math.log2(hz / 440.0))) + 57
     names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     return f"{names[n % 12]}{n // 12}"
+
+
+def _movmean(v, w):
+    """Скользящее среднее (как scipy uniform_filter1d, mode=nearest) — на numpy, быстро для длинных записей."""
+    w = max(1, int(w))
+    a = w // 2
+    vp = np.pad(np.asarray(v, dtype=np.float64), (a, w - a - 1), mode="edge")
+    c = np.cumsum(np.concatenate([[0.0], vp]))
+    return (c[w:] - c[:-w]) / w
+
+
+def fine_envelope(src_path, out_path, strength=1.0, win=0.025, hop=0.005, lim_db=6.0):
+    """Динамика исходника окнами 25 мс (то же, что в applio_worker, для Seed-VC): переносится мелкая часть
+    огибающей исходник/дубль (общий уровень прежний), не больше ±6 дБ, атаки сглажены 8 мс."""
+    y, sr = sf.read(str(out_path), dtype="float64", always_2d=True)
+    x, xsr = sf.read(str(src_path), dtype="float64", always_2d=True)
+    x = x.mean(1)
+    if xsr != sr:
+        x = resample(x, xsr, sr).astype(np.float64)
+    n = len(y)
+    x = np.pad(x, (0, max(0, n - len(x))))[:n]
+    m = y.mean(1)
+    w, h = max(8, int(win * sr)), max(1, int(hop * sr))
+    ex = np.sqrt(_movmean(x * x, w) + 1e-12)[::h]
+    ey = np.sqrt(_movmean(m * m, w) + 1e-12)[::h]
+    if len(ex) < 4:
+        return
+    r = np.log(ex / ey)
+    fine = r - _movmean(r, max(3, int(0.5 / hop)))
+    quiet = (ex < ex.max() * 10 ** (-50 / 20)) | (ey < ey.max() * 10 ** (-50 / 20))
+    fine[quiet] = 0.0
+    lim = lim_db / 20 * np.log(10)
+    fine = _movmean(np.clip(fine, -lim, lim), max(1, int(0.008 / hop))) * float(min(1.0, strength))
+    g = np.exp(np.interp(np.arange(n), np.arange(len(fine)) * h + w // 2, fine))
+    z = y * g[:, None]
+    pk = np.abs(z).max()
+    if pk > 0.999:
+        z *= 0.999 / pk
+    sf.write(str(out_path), z, sr, subtype="FLOAT")

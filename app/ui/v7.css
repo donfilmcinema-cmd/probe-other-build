@@ -273,6 +273,8 @@
 #pop-conv .v7-fld { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 #pop-conv .v7-fld > span { min-width: 0; }
 #pop-conv .v7-fld:has(#v-f0) { grid-template-columns: minmax(0, 1fr); }
+#pop-conv #v-engine { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #121116; width: 100%; box-sizing: border-box; }
+#pop-conv #v-engine button { height: 28px; font: 700 11px var(--v7-n); }
 #pop-conv #v-f0 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #121116; width: 100%; box-sizing: border-box; }
 #pop-conv #v-f0 button { height: 28px; padding: 0 4px; font: 700 11px var(--v7-n); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #pop-conv .v7-rowin { flex-wrap: wrap; row-gap: 4px; }
@@ -293,3 +295,6 @@
 .q-ok { color: #8fd39a; } .q-bad { color: #e8857b; }
 .q-rep h6 { margin: 10px 0 4px; font: 700 11px var(--v7-n); letter-spacing: .08em; color: #b9b4ac; text-transform: uppercase; }
 .q-rep .v7-btn.sm { height: 22px; padding: 0 7px; margin-left: 4px; }
+
+.q-cmp td:first-child { white-space: nowrap; }
+.q-cmp .bad { color: #e8857b; } .q-cmp .ok { color: #8fd39a; }

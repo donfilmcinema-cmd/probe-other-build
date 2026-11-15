@@ -18,7 +18,8 @@ CLEAN_DEFAULTS = {"mix": False, "backing": True, "quality": "max", "dereverb": "
 CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.33, "volume_envelope": 1.0,
                     "f0_method": "rmvpe", "f0_autotune": False, "f0_autotune_strength": 0.4,
                     "clean_audio": False, "clean_strength": 0.4, "split_audio": False,
-                    "proposed_pitch": False, "match_level": True}
+                    "proposed_pitch": False, "match_level": True,
+                    "engine": "rvc", "svc_steps": 30, "svc_cfg": 0.7}   # 0.8.1: движок RVC | Seed-VC
 
 BUILTIN_PRESETS = {
     "Стандарт": {},
@@ -255,9 +256,17 @@ def clean(ctx, song_id, opts):
 def convert(ctx, song_id, voice, opts, what=("lead",)):
     import voices as V
     s = get(song_id)
-    model, index = V.model_files(voice)
     o = dict(CONVERT_DEFAULTS)
     o.update({k: v for k, v in (opts or {}).items() if k in CONVERT_DEFAULTS})
+    svc = o.get("engine") == "seedvc"
+    if svc:
+        if not E.seedvc_ready():
+            ctx.span(0.0, 0.3, "Seed-VC — первая установка…")
+            E.install_seedvc(ctx)
+        model, index = "", ""
+        ref = V.reference(voice)
+    else:
+        model, index = V.model_files(voice)
     p = E.paths()
     if not p.applio_py.exists():
         raise E.EngineError("Движок не установлен — откройте вкладку «Движок».")
@@ -284,10 +293,24 @@ def convert(ctx, song_id, voice, opts, what=("lead",)):
         items.append((role, it))
     if not items:
         raise E.EngineError("Нечего перепевать: нет нужной дорожки.")
-    job = {"items": [it for _, it in items]}
-    (tmp / "job.json").write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
     ctx.span(0.05, 0.93, "Перепевка…")
-    ctx.run([p.applio_py, workers / "applio_worker.py", tmp / "job.json"], cwd=p.applio, what="Перепевка")
+    if svc:
+        # Seed-VC: содержание по Whisper, тембр — по образцу голоса; затем та же мелкая динамика, что у RVC
+        sj = {"src_dir": str(E.seedvc_dir()), "fp16": True,
+              "items": [{"input": it["input"], "output": it["output"], "reference": str(ref), "pitch": it["pitch"],
+                         "steps": int(o["svc_steps"]), "cfg_rate": float(o["svc_cfg"]), "label": it["label"]}
+                        for _, it in items]}
+        (tmp / "svc.json").write_text(json.dumps(sj, ensure_ascii=False), encoding="utf-8")
+        ctx.run([p.exec_py, workers / "seedvc_worker.py", tmp / "svc.json"], env=E.exec_env(), cwd=E.seedvc_dir(),
+                what="Перепевка (Seed-VC)")
+        if 1.0 - float(o["volume_envelope"]) >= 0.5:
+            for _, it in items:
+                if Path(it["output"]).exists():
+                    A.fine_envelope(it["input"], it["output"], 1.0 - float(o["volume_envelope"]))
+    else:
+        job = {"items": [it for _, it in items]}
+        (tmp / "job.json").write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
+        ctx.run([p.applio_py, workers / "applio_worker.py", tmp / "job.json"], cwd=p.applio, what="Перепевка")
     ctx.span(0.93, 1.0, "Сохраняю результат…")
     vname = V.get(voice).name
     takes = s.m.setdefault("takes", [])
@@ -394,6 +417,8 @@ def text_fix(ctx, song_id, take_id, lyrics, marks, language="auto"):
     s.m["lyrics"] = lyrics or s.m.get("lyrics", "")
     s.save()
     t, src = _take(s, take_id)
+    if (t.get("opts") or {}).get("engine") == "seedvc":
+        raise E.EngineError("«Текст» пока работает с дублями RVC. Для Seed-VC — перепойте место дублем RVC.")
     model, index = V.model_files(t["voice"])
     o = dict(CONVERT_DEFAULTS)
     o.update({k: v for k, v in (t.get("opts") or {}).items() if k in CONVERT_DEFAULTS})

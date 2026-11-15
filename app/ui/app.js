@@ -434,6 +434,7 @@ function applyOpts(o) {
   S.opts = Object.assign({}, S.defaults, o);
   for (const sd of SLIDERS) sd.set(S.opts[sd.k]);
   segSet('v-f0', S.opts.f0_method);
+  segSet('v-engine', S.opts.engine || 'rvc');
   $('v-autotune').checked = !!S.opts.f0_autotune;
   $('v-cleanout').checked = !!S.opts.clean_audio;
   $('v-match').checked = S.opts.match_level !== false;
@@ -454,6 +455,11 @@ function markCustom() {
   api('settings', { last_opts: S.opts, last_preset: '' }).catch(() => {});
 }
 segBind('v-f0', v => { S.opts.f0_method = v; markCustom(); });
+segBind('v-engine', v => { S.opts.engine = v; markCustom(); renderConvEngineNote(); });
+function renderConvEngineNote() {
+  const n = $('conv-note');
+  if (n) n.textContent = (S.opts && S.opts.engine === 'seedvc') ? 'Движок Seed-VC (проба): тембр — по образцу голоса; «Тембр» и «Защита» не действуют.' : '';
+}
 $('v-autotune').onchange = () => { S.opts.f0_autotune = $('v-autotune').checked; markCustom(); };
 $('v-cleanout').onchange = () => { S.opts.clean_audio = $('v-cleanout').checked; markCustom(); };
 $('v-match').onchange = () => { S.opts.match_level = $('v-match').checked; markCustom(); };
@@ -560,6 +566,7 @@ $('conv-go').onclick = async () => {
 
 function optsLine(o) {
   const f = { rmvpe: 'точный', fcpe: 'мягкий', crepe: 'плавный', 'hybrid[rmvpe+fcpe]': 'точный + мягкий' }[o.f0_method] || o.f0_method;
+  if (o.engine === 'seedvc') return `Seed-VC · тон ${o.pitch > 0 ? '+' : ''}${o.pitch} · динамика ${Math.round((1 - o.volume_envelope) * 100)}%`;
   return `тон ${o.pitch > 0 ? '+' : ''}${o.pitch} · тембр ${Math.round(o.index_rate * 100)}% · защита ${o.protect >= 0.5 ? 'выкл.' : num(o.protect)} · динамика ${Math.round((1 - o.volume_envelope) * 100)}% · ${f}` +
     (o.f0_autotune ? ' · автотюн' : '') + (o.clean_audio ? ' · шумодав' : '');
 }
@@ -694,6 +701,24 @@ async function showQuality(s, t, rep) {
   });
   if (await pending) runQuality(s, t);
 }
+/* Сравнение дублей (0.8.1): таблица цифр «Качества» по всем дублям песни — RVC против Seed-VC */
+$('takes-table').onclick = () => {
+  const s = S.song;
+  if (!s) return;
+  const takes = (s.takes || []).slice().sort((a, b) => a.num - b.num);
+  const c = (ok, v) => `<td class="${ok === false ? 'bad' : ok ? 'ok' : ''}">${v ?? '—'}</td>`;
+  const rows = takes.map(t => {
+    const q = t.quality, o = t.opts || {};
+    const eng = o.engine === 'seedvc' ? 'Seed-VC' : 'RVC';
+    if (!q) return `<tr><td>${String(t.num).padStart(2, '0')}</td><td>${eng}</td><td colspan="6" class="v7-note">нет проверки — нажмите «Качество» у дубля</td></tr>`;
+    return `<tr><td>${String(t.num).padStart(2, '0')}</td><td>${eng}</td>` + c(q.ok.wer, q.wer + ' %') + c(null, q.wer_src + ' %') +
+      c(q.ok.brightness, q.bright == null ? null : Math.round(q.bright * 100) + ' %') + c(q.ok.dynamics, q.env_db == null ? null : q.env_db + ' дБ') +
+      c(q.ok.clicks, q.clicks) + `<td>${q.problems}</td></tr>`;
+  }).join('');
+  modal({ title: 'Сравнение дублей · ' + s.name, cancel: false, ok: 'Закрыть',
+    html: `<div class="q-rep"><table class="q-t q-cmp"><tr><td>№</td><td>движок</td><td>WER</td><td>WER исходника</td><td>яркость</td><td>динамика 20 мс</td><td>щелчки</td><td>слов с ошибкой</td></tr>${rows}</table>
+    <p class="v7-note">Цели: WER ≤ исходник + 2 п.п., яркость ≥ 80 %, динамика ≤ 1,5 дБ, щелчков 0. Отчёты — файлы «… - качество.json» рядом с дублями.</p></div>` });
+};
 /* A/B для дублей: переключает играющий дубль между исходником и дублем без остановки */
 $('takes-ab').querySelectorAll('button').forEach(b => b.onclick = () => {
   $('takes-ab').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));

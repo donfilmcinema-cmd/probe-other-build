@@ -416,6 +416,11 @@
           </div>
           <div class="v7-pop" id="pop-conv" hidden>
             <h5>Перепевка — подробно<i></i><button class="v7-x" data-close>✕</button></h5>
+            <div class="v7-fld"><span>Движок перепевки</span>
+              <div class="v7-seg" id="v-engine">
+                <button data-v="rvc" class="on" title="RVC (Applio): модель вокалистки, тембр и защита согласных — ползунками.">RVC</button>
+                <button data-v="seedvc" title="Seed-VC (0.8.1, проба): слова — по распознаванию речи (Whisper), тембр — по образцу голоса из датасета, без обучения. Нужен Executor; при первом запуске скачается ~1,5 ГБ. «Тембр» и «Защита» на него не действуют.">Seed-VC</button>
+              </div></div>
             <div class="v7-fld"><span>Высота тона</span>
               <div class="v7-seg" id="v-f0">
                 <button data-v="rmvpe" class="on" title="Лучший для пения: держит ноты и мелизмы.">Точный</button>
@@ -441,7 +446,7 @@
       <!-- ДУБЛИ -->
       <div class="v7-card" id="p-takes">
         <h5>Дубли<i></i><em id="takes-h">Пробел — играть / пауза, Tab — исходник / дубль без остановки</em>
-          <div class="v7-ab" id="takes-ab"><button data-s="A">Исходник</button><button data-s="B" class="on">Дубль</button></div></h5>
+          <div class="v7-ab" id="takes-ab"><button data-s="A">Исходник</button><button data-s="B" class="on">Дубль</button></div><button class="v7-btn sm" id="takes-table" title="Все дубли песни с цифрами «Качества»: движок, разборчивость, яркость, динамика, щелчки — сравнить RVC и Seed-VC">Сравнить</button></h5>
         <div id="takes" class="v7-takes"></div>
         <div class="v7-row v7-takes-f">
           <span class="v7-note">★ — лучший дубль · ТЕКСТ — исправить съеденные слова или заменить слово</span>

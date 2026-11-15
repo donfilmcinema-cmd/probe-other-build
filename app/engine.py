@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -62,6 +62,10 @@ PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/ru/ru_RU
 EXEC_PACKAGES = ["torch==2.2.0", "torchaudio==2.2.0", "numpy<2.0.0", "transformers==4.41.2", "accelerate==1.11.0",
                  "omegaconf==2.3.0", "librosa==0.11.0", "scipy==1.15.3", "soundfile==0.13.1", "tqdm",
                  "g2p_en==2.1.0", "nltk==3.9.2", "mido==1.3.3", "huggingface_hub>=0.20.0"]
+# Seed-VC (0.8.1) — второй движок перепевки: содержание по Whisper, тембр по образцу голоса (GPLv3)
+SEEDVC_COMMIT = "51383efd921027683c89e5348211d93ff12ac2a8"
+SEEDVC_ZIP = f"https://github.com/Plachtaa/seed-vc/archive/{SEEDVC_COMMIT}.zip"
+SEEDVC_PACKAGES = ["munch==4.0.0", "einops==0.8.0", "pyyaml", "numpy<2.0.0"]
 NO_WINDOW = 0x08000000 if IS_WIN else 0
 
 HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -844,6 +848,45 @@ def install_piper(ctx):
     for ext in (".onnx", ".onnx.json"):
         download(PIPER_URL + ext, p.exec_piper / (PIPER_VOICE + ext), ctx, "Голос Piper")
     marker("exec_piper").write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+
+
+def seedvc_dir():
+    return paths().exec / "seedvc" / "src"
+
+
+def seedvc_ready():
+    return marker("exec_seedvc").exists() and (seedvc_dir() / "modules" / "commons.py").exists()
+
+
+def install_seedvc(ctx):
+    """Seed-VC: код (GitHub, закреплённая версия) + 2 пакета в среду Executor + модели (~1,5 ГБ, huggingface.co)."""
+    if seedvc_ready():
+        return
+    if not executor_status()["ready"]:
+        raise EngineError("Seed-VC ставится в среду Executor — сначала установите Executor (шаг 4 → «Установить»).")
+    p = paths()
+    src = seedvc_dir()
+    if not (src / "modules" / "commons.py").exists():
+        ctx.span(0.0, 0.1, "Seed-VC: код…")
+        z = download(SEEDVC_ZIP, p.engine / "dl" / "seedvc.zip", ctx, "Seed-VC")
+        tmp = p.engine / "dl" / "seedvc_x"
+        shutil.rmtree(tmp, ignore_errors=True)
+        with zipfile.ZipFile(z) as zf:
+            zf.extractall(tmp)
+        top = next(d for d in tmp.iterdir() if d.is_dir())
+        shutil.rmtree(src, ignore_errors=True)
+        src.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(top), str(src))
+        shutil.rmtree(tmp, ignore_errors=True)
+    ctx.span(0.1, 0.2, "Seed-VC: библиотеки…")
+    _uv(ctx, ["pip", "install", "-p", p.exec_py, *SEEDVC_PACKAGES], "Установка Seed-VC")
+    ctx.span(0.2, 1.0, "Seed-VC: модели (~1,5 ГБ)…")
+    workers = ensure_workers()
+    job = p.engine / "tmp" / "seedvc_warmup.json"
+    job.parent.mkdir(parents=True, exist_ok=True)
+    job.write_text(json.dumps({"src_dir": str(src), "items": [], "fp16": True}), encoding="utf-8")
+    ctx.run([p.exec_py, workers / "seedvc_worker.py", job], env=exec_env(), cwd=src, what="Seed-VC: модели")
+    marker("exec_seedvc").write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
 
 
 def executor_status():

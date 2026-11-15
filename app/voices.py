@@ -159,6 +159,42 @@ def model_files(slug):
     return pth, idx
 
 
+def reference(slug, seconds=24.0):
+    """Образец голоса для Seed-VC (0.8.1): до 25 с пения вокалистки — самые длинные отобранные фразы подряд
+    (паузы 80 мс), 44,1 кГц, пик −3 дБ. Без датасета — reference.wav в папке голоса (если положен)."""
+    import numpy as np
+    v = get(slug)
+    out = v.dir / "seedvc_ref.wav"
+    ph = sorted([p for p in v.phrases() if p.get("status") == "keep"], key=lambda p: -p.get("dur", 0))
+    sig = hash_ids(sorted(p["id"] for p in ph)) if ph else "file"
+    if out.exists() and v.m.get("seedvc_ref") == sig:
+        return out
+    parts, total, sr = [], 0.0, 44100
+    for p in ph:
+        f = v.dir / "phrases" / f"{p['id']}.wav"
+        if not f.exists():
+            continue
+        x, fsr = A.read(f, mono=True)
+        x = (A.resample(x, fsr, sr) if fsr != sr else x)[:, 0]
+        parts += [x, np.zeros(int(0.08 * sr), np.float32)]
+        total += len(x) / sr
+        if total >= seconds:
+            break
+    if not parts:
+        own = v.dir / "reference.wav"
+        if not own.exists():
+            raise E.EngineError(f"Для Seed-VC нужен образец голоса «{v.name}»: отберите фразы в датасет (шаг 2) "
+                                f"или положите в папку голоса файл reference.wav (10–25 с чистого пения).")
+        x, fsr = A.read(own, mono=True)
+        parts = [(A.resample(x, fsr, sr) if fsr != sr else x)[:, 0]]
+    y = np.concatenate(parts)[:int(25 * sr)]
+    pk = float(np.max(np.abs(y))) or 1.0
+    A.write(out, y * (10 ** (-3 / 20) / pk), sr, "PCM_16")
+    v.m["seedvc_ref"] = sig
+    v.save()
+    return out
+
+
 def import_model(name, pth, index=None):
     """Готовая модель RVC (.pth и, если есть, .index) — сразу становится голосом."""
     pth = Path(pth)
