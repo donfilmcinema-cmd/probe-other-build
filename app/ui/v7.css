@@ -269,7 +269,7 @@
 .tx-vd.bad{background:rgba(220,90,80,.18);color:#e8857b}
 
 /* 0.7.6 — «Перепевка — подробно» (DESIGN 15.11): ничто не выходит за рамку */
-#pop-conv { padding: 10px 16px; box-sizing: border-box; max-width: 100%; max-height: calc(100vh - 140px); overflow-y: auto; overflow-x: hidden; }
+#pop-conv { padding: 10px 16px; box-sizing: border-box; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 #pop-conv .v7-fld { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 #pop-conv .v7-fld > span { min-width: 0; }
 #pop-conv .v7-fld:has(#v-f0) { grid-template-columns: minmax(0, 1fr); }

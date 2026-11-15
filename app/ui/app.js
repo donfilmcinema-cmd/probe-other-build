@@ -300,7 +300,22 @@ document.querySelectorAll('[data-pop]').forEach(b => b.onclick = e => {
   const show = p.hidden;
   closePops();
   p.hidden = !show;
+  if (show && p.id === 'pop-conv') fitPop(p);
 });
+/* панель целиком внутри окна (DESIGN 15.11): не помещается вниз — поднимается, остаток — прокрутка внутри */
+function fitPop(p) {
+  p.style.top = ''; p.style.maxHeight = '';
+  const bottom = window.innerHeight - 34 - 8, topMin = 56;
+  let r = p.getBoundingClientRect();
+  const need = p.scrollHeight;
+  if (r.top + need > bottom) {
+    const up = Math.min(r.top + need - bottom, r.top - topMin);
+    if (up > 0) p.style.top = (-up) + 'px';
+    r = p.getBoundingClientRect();
+  }
+  p.style.maxHeight = Math.max(200, bottom - r.top) + 'px';
+}
+window.addEventListener('resize', () => { const p = $('pop-conv'); if (p && !p.hidden) fitPop(p); });
 document.querySelectorAll('.v7-pop [data-close]').forEach(b => b.onclick = () => { b.closest('.v7-pop').hidden = true; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePops(); closeMenus(); } });
 function closeMenus() { document.querySelectorAll('.v7-menu').forEach(m => m.remove()); }
