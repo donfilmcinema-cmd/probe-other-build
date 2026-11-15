@@ -176,7 +176,7 @@ def artifacts(x, y, sr):
             e = k
             while e < m and bad[e]:
                 e += 1
-            res["bursts"].append({"t": round(k * h / sr, 3), "dur": round((e - k) * h / sr, 3),
+            res["bursts"].append({"t": round(float(k * h / sr), 3), "dur": round((e - k) * h / sr, 3),
                                   "hf4k": round(float(hy[k:e].max()), 2), "src_hf4k": round(float(hx[k:e].max()), 2)})
             k = e
         else:
@@ -190,18 +190,20 @@ def artifacts(x, y, sr):
         w1, w30 = max(4, int(0.001 * sr)), int(0.03 * sr)
 
         def spikes(v):
-            e = uniform_filter1d(sosfilt(sos, v) ** 2, w1)
-            base = uniform_filter1d(e, w30) + 1e-12
+            e = uniform_filter1d(sosfilt(sos, v) ** 2, w1)[::w1]          # энергия >6 кГц, шаг 1 мс
+            base = median_filter(e, size=31, mode="nearest") + 1e-12    # фон соседних 30 мс (медиана — без самого щелчка)
             return 10 * np.log10(e / base + 1e-12), e
 
         sy, ey = spikes(y)
         sx, _ = spikes(x[:len(y)] if len(x) >= len(y) else np.pad(x, (0, len(y) - len(x))))
+        m2 = min(len(sy), len(sx))
+        sy, sx, ey = sy[:m2], sx[:m2], ey[:m2]
         lvl = ey.max() * 10 ** (-50 / 10)
-        cand = np.flatnonzero((sy > 13) & (sx < 7) & (ey > lvl))
+        cand = np.flatnonzero((sy > 15) & (sx < 8) & (ey > lvl))
         last = -10 ** 9
         for c in cand:
-            if c - last > int(0.05 * sr):
-                res["clicks"].append({"t": round(c / sr, 3), "db": round(float(sy[c]), 1)})
+            if c - last > 50:
+                res["clicks"].append({"t": round(float(c * w1 / sr), 3), "db": round(float(sy[c]), 1)})
             last = c
         res["clicks"] = res["clicks"][:200]
     res["bursts"] = res["bursts"][:200]
