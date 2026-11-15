@@ -65,7 +65,7 @@ EXEC_PACKAGES = ["torch==2.2.0", "torchaudio==2.2.0", "numpy<2.0.0", "transforme
 # Seed-VC (0.8.1) — второй движок перепевки: содержание по Whisper, тембр по образцу голоса (GPLv3)
 SEEDVC_COMMIT = "51383efd921027683c89e5348211d93ff12ac2a8"
 SEEDVC_ZIP = f"https://github.com/Plachtaa/seed-vc/archive/{SEEDVC_COMMIT}.zip"
-SEEDVC_PACKAGES = ["munch==4.0.0", "einops==0.8.0", "pyyaml", "numpy<2.0.0"]
+SEEDVC_PACKAGES = ["munch==4.0.0", "einops==0.8.0", "pyyaml", "matplotlib", "numpy<2.0.0"]
 NO_WINDOW = 0x08000000 if IS_WIN else 0
 
 HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))

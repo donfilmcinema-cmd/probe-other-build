@@ -75,7 +75,7 @@ jobs:
         run: |
           curl -sSL -o w/seedvc.zip https://github.com/Plachtaa/seed-vc/archive/51383efd921027683c89e5348211d93ff12ac2a8.zip
           python -m zipfile -e w/seedvc.zip w/ && mv w/seed-vc-* w/seedvc
-          w/venv_exec/bin/pip install -q "munch==4.0.0" "einops==0.8.0" pyyaml "numpy<2.0.0"
+          w/venv_exec/bin/pip install -q "munch==4.0.0" "einops==0.8.0" pyyaml matplotlib "numpy<2.0.0"
           w/venv_test/bin/python tests/seedvc/run_test.py w w/seedvc w/whisper-small
       - name: Результат — в ветку debug-textfix
         if: always()

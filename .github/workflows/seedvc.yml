@@ -1,0 +1,32 @@
+name: Seed-VC — quick check (Linux, CPU)
+on:
+  workflow_dispatch: {}
+jobs:
+  seedvc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Среда (как Executor) + Seed-VC
+        run: |
+          mkdir -p w && cd w
+          python -m venv venv_exec
+          venv_exec/bin/pip install -q --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.2.0" "torchaudio==2.2.0" "numpy<2.0.0" \
+            "transformers==4.41.2" "accelerate==1.11.0" "librosa==0.11.0" "scipy==1.15.3" "soundfile==0.13.1" tqdm "huggingface_hub>=0.20.0,<1.0" \
+            "munch==4.0.0" "einops==0.8.0" pyyaml matplotlib
+          curl -sSL -o seedvc.zip https://github.com/Plachtaa/seed-vc/archive/51383efd921027683c89e5348211d93ff12ac2a8.zip
+          python -m zipfile -e seedvc.zip . && mv seed-vc-* seedvc
+      - name: Перепевка Seed-VC
+        run: |
+          cd w
+          S=$PWD/seedvc
+          cat > job.json <<J
+          {"src_dir": "$S", "device": "cpu", "fp16": false, "items": [
+            {"input": "$S/examples/source/TECHNOPOLIS - 2085 [vocals]_[cut_14sec].wav", "output": "$PWD/out.wav",
+             "reference": "$S/examples/reference/azuma_0.wav", "pitch": 0, "steps": 10, "cfg_rate": 0.7, "label": "проба"}]}
+          J
+          venv_exec/bin/python ../app/workers/seedvc_worker.py job.json
+          venv_exec/bin/python -c "import soundfile as sf, numpy as np; y,sr=sf.read('out.wav'); x,xs=sf.read('$S/examples/source/TECHNOPOLIS - 2085 [vocals]_[cut_14sec].wav'); print('OUT', sr, len(y)/sr, len(x)/xs, float(np.sqrt(np.mean(y**2))))"
