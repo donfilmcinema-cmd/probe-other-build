@@ -338,7 +338,11 @@ def step_content(job):
                  "hint_hf2k": _hf_share(h[a:b], sr, 2000), "src_hf2k": _hf_share(x[a:b], sr, 2000)}
             # подсказка пустая или не голос (шум, «стекло») — место не трогаем: лучше прежний звук, чем мусор
             # 0.7.6: глухая подсказка (одна гласная без согласных) — ContentVec берёт из неё «гудение», слово тускнеет
-            dull = q["src_hf1k"] > 0.15 and q["hint_hf1k"] < 0.5 * q["src_hf1k"]
+            # мерка — пение исходника рядом (±0,5 с вне окна): само окно может быть съедено и звучать шумом
+            nb = np.concatenate([x[max(0, a - int(0.5 * sr)):a], x[b:b + int(0.5 * sr)]])
+            q["near_hf1k"] = _hf_share(nb, sr, 1000)
+            ref_hf = q["near_hf1k"] if len(nb) > int(0.1 * sr) else q["src_hf1k"]
+            dull = ref_hf > 0.15 and q["hint_hf1k"] < 0.5 * ref_hf
             if hdb < -50 or hv < 0.25 or (dull and not job.get("allow_dull")):
                 q["skip"] = ("подсказка пустая" if hdb < -50 else "подсказка не голосом" if hv < 0.25
                              else "подсказка неразборчива (глухая)")
