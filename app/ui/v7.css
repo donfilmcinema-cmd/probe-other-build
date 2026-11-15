@@ -282,7 +282,9 @@
 
 /* 0.8.0 — «Качество» дубля */
 .q-btn.ok { color: #8fd39a; } .q-btn.bad { color: #e8857b; }
-#modal .q-rep { max-height: 62vh; overflow: auto; min-width: min(760px, 86vw); text-align: left; }
+#modal .q-rep { max-height: 62vh; overflow: auto; width: 100%; text-align: left; }
+#modal .modal-box:has(.q-rep) { width: min(900px, 92vw); max-width: min(900px, 92vw); }
+#modal .modal-box:has(.q-rep) #m-text { overflow-x: hidden; }
 .q-head { font: 700 13px var(--v7-n); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
 .q-head.ok { background: rgba(110,190,120,.15); color: #8fd39a; } .q-head.bad { background: rgba(220,90,80,.15); color: #e8857b; }
 .q-t { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 6px; }
