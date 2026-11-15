@@ -38,6 +38,48 @@ def say(kind, payload):
 _TF = {"content": None, "cpad": None, "spans": [], "busy": False}
 
 
+def fine_envelope(src_path, out_path, strength=1.0, win=0.025, hop=0.005, lim_db=6.0):
+    """Динамика исходника окнами 25 мс (0.7.6). Applio переносит громкость окнами ~0,5 с — акценты и атаки внутри
+    фразы теряются (у автора отклонение огибающей 20 мс 2,1 дБ, p90 3,3). Здесь переносится только «мелкая»
+    часть огибающей: отношение исходник/дубль, делённое на его же сглаживание 0,5 с (общий уровень не меняется),
+    не больше ±6 дБ, атаки сглажены 8 мс; в тишине исходника — без изменений."""
+    import numpy as np
+    import soundfile as sf
+    from math import gcd
+    from scipy.ndimage import uniform_filter1d
+    from scipy.signal import resample_poly
+    y, sr = sf.read(out_path, dtype="float64", always_2d=True)
+    x, xsr = sf.read(src_path, dtype="float64", always_2d=True)
+    x = x.mean(1)
+    if xsr != sr:
+        g_ = gcd(int(sr), int(xsr))
+        x = resample_poly(x, int(sr) // g_, int(xsr) // g_)
+    n = len(y)
+    x = np.pad(x, (0, max(0, n - len(x))))[:n]
+    m = y.mean(1)
+    w, h = max(8, int(win * sr)), max(1, int(hop * sr))
+    def env(v):
+        e = np.sqrt(uniform_filter1d(v * v, w, mode="nearest") + 1e-12)
+        return e[::h]
+    ex, ey = env(x), env(m)
+    if len(ex) < 4:
+        return
+    r = np.log(ex / ey)
+    slow = uniform_filter1d(r, max(3, int(0.5 / hop)), mode="nearest")
+    fine = r - slow
+    quiet = (ex < ex.max() * 10 ** (-50 / 20)) | (ey < ey.max() * 10 ** (-50 / 20))
+    fine[quiet] = 0.0
+    lim = lim_db / 20 * np.log(10)
+    fine = np.clip(fine, -lim, lim)
+    fine = uniform_filter1d(fine, max(1, int(0.008 / hop)), mode="nearest") * float(min(1.0, strength))
+    g = np.exp(np.interp(np.arange(n), np.arange(len(fine)) * h + w // 2, fine))
+    z = y * g[:, None]
+    pk = np.abs(z).max()
+    if pk > 0.999:
+        z *= 0.999 / pk
+    sf.write(out_path, z, sr, subtype="FLOAT")
+
+
 def _install_textfix_hooks():
     import numpy as np
     import rvc.infer.pipeline as PL
@@ -230,6 +272,9 @@ def main():
             sh = StftPitchShift(1024, 256, sr0)
             y = np.stack([sh.shiftpitch(x[:, c], factors=1, quefrency=0.0015, distortion=fm) for c in range(x.shape[1])], 1)
             sf.write(it["output"], y[:len(x)], sr0)
+        s_env = 1.0 - float(it.get("volume_envelope", 1.0))
+        if s_env >= 0.5 and not it.get("no_fine_envelope"):
+            fine_envelope(it["input"], it["output"], s_env)
         out.append({"output": it["output"], "seconds": round(time.time() - t0, 1)})
     say("R", json.dumps({"items": out}, ensure_ascii=False))
 

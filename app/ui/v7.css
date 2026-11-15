@@ -267,3 +267,15 @@
 .tx-vd.ok{background:rgba(110,190,120,.18);color:#8fd39a}
 .tx-vd.mid{background:rgba(227,163,94,.18);color:#e3a35e}
 .tx-vd.bad{background:rgba(220,90,80,.18);color:#e8857b}
+
+/* 0.7.6 — «Перепевка — подробно» (DESIGN 15.11): ничто не выходит за рамку */
+#pop-conv { padding: 10px 16px; box-sizing: border-box; max-width: 100%; max-height: calc(100vh - 140px); overflow-y: auto; overflow-x: hidden; }
+#pop-conv .v7-fld { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+#pop-conv .v7-fld > span { min-width: 0; }
+#pop-conv .v7-fld:has(#v-f0) { grid-template-columns: minmax(0, 1fr); }
+#pop-conv #v-f0 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #121116; width: 100%; box-sizing: border-box; }
+#pop-conv #v-f0 button { height: 28px; padding: 0 4px; font: 700 11px var(--v7-n); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#pop-conv .v7-rowin { flex-wrap: wrap; row-gap: 4px; }
+#pop-conv .v7-row { flex-wrap: wrap; }
+#pop-conv .v7-chk { min-width: 0; }
+#pop-conv .v7-chk span { overflow-wrap: anywhere; }

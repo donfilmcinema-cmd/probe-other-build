@@ -21,7 +21,7 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PAD = 1.0          # с: окно перепевки вокруг пометки (контекст для RVC)
-XF = 0.03          # с: кроссфейд стыка
+XF = 0.06          # с: кроссфейд стыка (0.7.6: было 0,03 — на смене содержания Applio давал всплески ВЧ, длинный стык их гасит)
 CTX_GAP = 0.8      # с: соседнее слово дальше этого — не поётся в подсказке
 
 
@@ -288,6 +288,18 @@ def _voicing(v, sr):
     return round(voiced / max(1, int(loud.sum())), 3), round(lvl, 1)
 
 
+def _hf_share(v, sr, f):
+    """Доля энергии выше f Гц — «яркость», согласные. У глухой подсказки >1 кГц ~5 % против ~70 % у пения."""
+    import numpy as np
+    v = np.asarray(v, dtype=np.float64)
+    if len(v) < 256:
+        return 0.0
+    S = np.abs(np.fft.rfft(v * np.hanning(len(v)))) ** 2
+    fr = np.fft.rfftfreq(len(v), 1 / sr)
+    tot = S[fr > 60].sum()
+    return round(float(S[fr > f].sum() / tot), 3) if tot > 0 else 0.0
+
+
 def step_content(job):
     import numpy as np
     import soundfile as sf
@@ -321,10 +333,15 @@ def step_content(job):
             hv, hdb = _voicing(h[a:b], sr)
             sv, sdb = _voicing(x[a:b], sr)
             q = {"mark": p.get("mark", mi), "text": p.get("text"), "t0": round(w0, 3), "t1": round(w1, 3),
-                 "hint_voiced": hv, "hint_db": hdb, "src_voiced": sv, "src_db": sdb}
+                 "hint_voiced": hv, "hint_db": hdb, "src_voiced": sv, "src_db": sdb,
+                 "hint_hf1k": _hf_share(h[a:b], sr, 1000), "src_hf1k": _hf_share(x[a:b], sr, 1000),
+                 "hint_hf2k": _hf_share(h[a:b], sr, 2000), "src_hf2k": _hf_share(x[a:b], sr, 2000)}
             # подсказка пустая или не голос (шум, «стекло») — место не трогаем: лучше прежний звук, чем мусор
-            if hdb < -50 or hv < 0.25:
-                q["skip"] = "подсказка пустая" if hdb < -50 else "подсказка не голосом"
+            # 0.7.6: глухая подсказка (одна гласная без согласных) — ContentVec берёт из неё «гудение», слово тускнеет
+            dull = q["src_hf1k"] > 0.15 and q["hint_hf1k"] < 0.5 * q["src_hf1k"]
+            if hdb < -50 or hv < 0.25 or (dull and not job.get("allow_dull")):
+                q["skip"] = ("подсказка пустая" if hdb < -50 else "подсказка не голосом" if hv < 0.25
+                             else "подсказка неразборчива (глухая)")
                 quality.append(q)
                 continue
             # уровень подсказки — как у исходника рядом (в провале исходник тих: берём соседей); не больше +10 дБ
@@ -416,9 +433,12 @@ def step_splice(job):
             # честная оценка: новое место — голос? (сравнение с тем же местом дубля)
             tv, tdb = _voicing(y[a + xf:b - xf].mean(1), sr)
             nv, ndb = _voicing(seg[xf:-xf], sr)
+            th, nh = _hf_share(y[a + xf:b - xf].mean(1), sr, 2000), _hf_share(seg[xf:-xf], sr, 2000)
             verdict = "голос" if (nv >= 0.5 or nv >= 0.8 * tv) else ("сомнительно" if nv >= 0.3 else "не голос")
+            if verdict == "голос" and th > 0.05 and nh < 0.5 * th:
+                verdict = "сомнительно"                      # тусклее дубля вдвое: согласные потерялись
             checks.append({"t0": round(a / sr, 3), "t1": round(b / sr, 3), "take_voiced": tv, "new_voiced": nv,
-                           "take_db": tdb, "new_db": ndb, "verdict": verdict})
+                           "take_db": tdb, "new_db": ndb, "take_hf2k": th, "new_hf2k": nh, "verdict": verdict})
             if verdict == "не голос" and not job.get("force"):
                 checks[-1]["kept"] = "оставлен прежний звук"
                 continue

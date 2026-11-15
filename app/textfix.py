@@ -51,7 +51,7 @@ def _soulx_hint(ctx, tmp, p, workers):
           "prompt_wav": str(p.exec_prompt_wav), "prompt_meta": str(p.exec_prompt_meta),
           "out_wav": str(tmp / "hint.wav"), "meta_out": str(tmp / "hint_meta.json"),
           "notes_out": str(tmp / "hint_notes.json"), "seg_dir": str(tmp / "segs"),
-          "cache_dir": str(p.exec / "cache" / "soulx"), "fp16": True, "style": "straight", "vibrato": 0}
+          "cache_dir": str(p.exec / "cache" / "soulx"), "fp16": False, "style": "straight", "vibrato": 0}  # 0.7.6: подсказка короткая — полная точность (FP16 под подозрением в глухоте)
     ctx.run([p.exec_py, workers / "executor_worker.py", _job(tmp, "hint", hj)], cwd=p.exec_src,
             env=E.exec_env(), what="Подсказка звучания")
 
