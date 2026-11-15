@@ -99,7 +99,8 @@ checks2 = {
         (r2["checks"]["wer"]["take"] or 0) > (r1["checks"]["wer"]["take"] or 0)),
     "here_dull": bool(hb1 and hb2 and hb1["ratio"] and hb2["ratio"] is not None and hb2["ratio"] < 0.6 * hb1["ratio"]),
     "clicks_seen": r2["checks"]["clicks"]["count"] >= 2 and r2["checks"]["clicks"]["count"] > r1["checks"]["clicks"]["count"],
-    "dynamics_worse": (r2["checks"]["dynamics"]["median_db"] or 0) > (r1["checks"]["dynamics"]["median_db"] or 0) + 0.8,
+    "dynamics_worse": (r2["checks"]["dynamics"]["median_db"] or 0) > (r1["checks"]["dynamics"]["median_db"] or 0) + 0.5
+                      and (r2["checks"]["dynamics"]["p90_db"] or 0) > (r1["checks"]["dynamics"]["p90_db"] or 0) + 1.5,
     "not_passed": not r2["passed"],
 }
 RES["bad_checks"] = checks2
