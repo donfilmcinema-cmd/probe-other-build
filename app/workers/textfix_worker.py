@@ -342,7 +342,9 @@ def step_content(job):
             nb = np.concatenate([x[max(0, a - int(0.5 * sr)):a], x[b:b + int(0.5 * sr)]])
             q["near_hf1k"] = _hf_share(nb, sr, 1000)
             ref_hf = q["near_hf1k"] if len(nb) > int(0.1 * sr) else q["src_hf1k"]
-            dull = ref_hf > 0.15 and q["hint_hf1k"] < 0.5 * ref_hf
+            # порог 0,25: яркость слова сама зависит от звуков (тёмное «у» — вдвое тусклее соседей), а глухая
+            # подсказка SoulX у автора — в 14 раз (5 % против 71 %)
+            dull = ref_hf > 0.15 and q["hint_hf1k"] < 0.25 * ref_hf
             if hdb < -50 or hv < 0.25 or (dull and not job.get("allow_dull")):
                 q["skip"] = ("подсказка пустая" if hdb < -50 else "подсказка не голосом" if hv < 0.25
                              else "подсказка неразборчива (глухая)")
