@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.8.7"
+VERSION = "0.8.8"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -587,32 +587,55 @@ def kill_children_of_self():
 
 # ---------------------------------------------------------------- установка движка
 
-def download(url, dst, ctx, label):
+def download(url, dst, ctx, label, tries=3):
+    """Скачать с докачкой (0.8.8): до 3 попыток с паузой 5/15 с, продолжение с места обрыва (Range), таймаут 60 с,
+    системный прокси Windows (urllib берёт его сам из настроек). Не вышло — ошибка с адресом и папкой для ручной
+    загрузки браузером."""
     ctx.check()
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(dst.suffix + ".part")
-    log(f"СКАЧИВАЮ {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": f"{APP}/{VERSION}"})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
-            total = int(r.headers.get("Content-Length") or 0)
-            got = 0
-            while True:
-                ctx.check()
-                chunk = r.read(1 << 16)
-                if not chunk:
-                    break
-                f.write(chunk)
-                got += len(chunk)
-                if total:
-                    ctx.progress(got / total, f"{label}: {got / 1e6:.0f} из {total / 1e6:.0f} МБ")
-    except Cancelled:
-        raise
-    except Exception as ex:
-        raise EngineError(f"Не удалось скачать {label}: {ex}. Проверьте интернет и попробуйте снова.")
-    os.replace(tmp, dst)
-    return dst
+    if dst.exists() and dst.stat().st_size > 0:
+        if dst.suffix.lower() != ".zip" or zipfile.is_zipfile(dst):
+            log(f"ФАЙЛ УЖЕ ЕСТЬ (скачан раньше или положен вручную): {dst}")
+            return dst
+        dst.unlink()
+    last = None
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler(urllib.request.getproxies()))
+    for attempt in range(tries):
+        got = tmp.stat().st_size if tmp.exists() else 0
+        log(f"СКАЧИВАЮ {url}" + (f" (попытка {attempt + 1}, с {got} байт)" if attempt or got else ""))
+        hdr = {"User-Agent": f"{APP}/{VERSION}"}
+        if got:
+            hdr["Range"] = f"bytes={got}-"
+        try:
+            with opener.open(urllib.request.Request(url, headers=hdr), timeout=60) as r:
+                if got and getattr(r, "status", 200) != 206:
+                    got = 0                                   # сервер не умеет докачку — с начала
+                total = int(r.headers.get("Content-Length") or 0) + got
+                with open(tmp, "ab" if got else "wb") as f:
+                    while True:
+                        ctx.check()
+                        chunk = r.read(1 << 16)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        got += len(chunk)
+                        if total:
+                            ctx.progress(got / total, f"{label}: {got / 1e6:.0f} из {total / 1e6:.0f} МБ")
+            os.replace(tmp, dst)
+            return dst
+        except Cancelled:
+            raise
+        except Exception as ex:  # noqa: BLE001
+            last = ex
+            log(f"СКАЧИВАНИЕ {label}: попытка {attempt + 1} не удалась: {ex}")
+            if attempt + 1 < tries:
+                for _ in range(5 if attempt == 0 else 15):
+                    ctx.check()
+                    time.sleep(1)
+    raise EngineError(f"Не удалось скачать {label}: {last}. Проверьте интернет и попробуйте снова — докачка продолжится "
+                      f"с места обрыва. Или скачайте файл браузером: {url} — и положите его сюда: {dst}")
 
 
 def disk_free_gb(path):
@@ -866,6 +889,12 @@ def install_seedvc(ctx):
         raise EngineError("Seed-VC ставится в среду Executor — сначала установите Executor (шаг 4 → «Установить»).")
     p = paths()
     src = seedvc_dir()
+    bundled = WORKERS_SRC / "seedvc_src"
+    if not (src / "modules" / "commons.py").exists() and (bundled / "modules" / "commons.py").exists():
+        # 0.8.8: код Seed-VC едет в установщике — GitHub не нужен (у автора GitHub через VPN не отвечал)
+        ctx.span(0.0, 0.1, "Seed-VC: код (из программы)…")
+        shutil.rmtree(src, ignore_errors=True)
+        shutil.copytree(bundled, src)
     if not (src / "modules" / "commons.py").exists():
         ctx.span(0.0, 0.1, "Seed-VC: код…")
         z = download(SEEDVC_ZIP, p.engine / "dl" / "seedvc.zip", ctx, "Seed-VC")

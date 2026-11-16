@@ -1,0 +1,1 @@
+Seed-VC (github.com/Plachtaa/seed-vc), commit 51383efd921027683c89e5348211d93ff12ac2a8, GPLv3 — только нужные для перепевки файлы (modules, hf_utils.py, configs/presets). Едет внутри установщика с 0.8.8, чтобы не качать код с GitHub.
