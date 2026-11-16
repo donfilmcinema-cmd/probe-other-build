@@ -747,7 +747,7 @@ async function runTune(s, t) {
 function showTune(s, R) {
   const pc = v => v == null ? '—' : Math.round(v * 100) + ' %';
   const wr = v => v == null ? '—' : v + ' %';
-  const rows = (R.rows || []).map((r, i) => `<tr class="${i === 0 ? 'best' : ''}"><td><button class="v7-btn sm" data-tp="${i}">▶</button></td>
+  const rows = (R.rows || []).map((r, i) => `<tr class="${i < 4 ? 'tu-top' : ''}"><td><button class="v7-btn sm" data-tp="${i}">▶</button></td>
     <td>${esc(r.epoch_label)}</td><td>${Math.round(r.index_rate * 100)} %</td><td>${String(r.protect).replace('.', ',')}</td>
     <td class="${r.wer != null && R.wer_source != null && r.wer <= R.wer_source + 2 ? 'q-ok' : ''}"><b>${wr(r.wer)}</b></td>
     <td class="${r.bright != null && (r.bright < 0.8 || r.bright > 1.5) ? 'q-bad' : ''}">${pc(r.bright)}</td>
@@ -758,11 +758,11 @@ function showTune(s, R) {
     ? `<p class="v7-note"><b>Чистка:</b> сырой исходник ${wr(R.wer_raw)} · очищенный ${wr(R.wer_source)}${R.wer_source - R.wer_raw >= 5 ? ' — <b class="q-bad">чистка съедает слова</b> (попробуйте мягче: без деревера / без удаления бэков)' : ' — чистка слов не теряет'}.</p>`
     : '<p class="v7-note">Сырой исходник песни не найден или песню не чистили — сравнение чистки не делалось.</p>';
   const html = `<div class="q-rep">
-    <div class="q-head ${b && b.in_norm ? 'ok' : 'bad'}">Отрывок ${R.window[0].toFixed(1)}–${R.window[1].toFixed(1)} с · ${R.words} сл. текста · исходник ${wr(R.wer_source)}${b ? ` · лучший: ${esc(b.epoch_label)}, тембр ${Math.round(b.index_rate * 100)} %, защита ${String(b.protect).replace('.', ',')} — WER ${wr(b.wer)}` : ''}</div>
+    <div class="q-head ${b && b.in_norm ? 'ok' : 'bad'}">Отрывок ${R.window[0].toFixed(1)}–${R.window[1].toFixed(1)} с · ${R.words} сл. текста · исходник ${wr(R.wer_source)}${b ? ` · четыре верхних — послушайте и выберите на слух` : ''}</div>
     <div class="v7-row" style="margin:6px 0"><button class="v7-btn sm" data-tp="src">▶ исходник отрывка</button>${R.raw_file ? '<button class="v7-btn sm" data-tp="raw">▶ сырой исходник</button>' : ''}<button class="v7-btn sm" id="tu-folder">Папка вариантов</button></div>
     ${diag}
     <table class="q-t q-cmp"><tr><td></td><td>модель</td><td>тембр</td><td>защита</td><td>WER</td><td>яркость</td><td>динамика</td><td>норма</td><td></td></tr>${rows}</table>
-    <p class="v7-note">Порядок: сначала варианты в норме (яркость 80–150 %, динамика ≤ 1,5 дБ), внутри — по разборчивости против текста песни. Защита: меньше — сильнее бережёт согласные. Цифры — подсказка: решает слух.</p>
+    <p class="v7-note">Порядок: сначала варианты в норме (яркость 80–150 %, динамика ≤ 1,5 дБ), внутри — по разборчивости против текста песни. Защита: меньше — сильнее бережёт согласные. Распознавание этого вокала шумное (сам исходник даёт заметный WER), поэтому программа не выбирает за вас: четыре верхних варианта выделены — послушайте их и решите на слух.</p>
     <p class="v7-note">«Применить» ставит тембр и защиту в панель перепевки и делает эту эпоху основной моделью голоса; дальше — «Перепеть» всю песню.</p></div>`;
   modal({ title: 'Подбор настроек по тексту · ' + s.name, html, cancel: false, ok: 'Закрыть' });
   const box = $('m-text');
@@ -2180,7 +2180,7 @@ async function boot() {
     if (st && !userPreset) {
       applyOpts(st.opts); setPresetSel('Стандарт');
       api('settings', { defaults_092: true, last_preset: 'Стандарт', last_opts: S.opts }).catch(() => {});
-      setTimeout(() => toast('0.9.2: настройки перепевки по умолчанию — защита согласных 0,15, тембр 60 %, динамика исходника 35 % (как удачные дубли 27.10).'), 1500);
+      setTimeout(() => toast('0.9.2: настройки перепевки по умолчанию — тембр 60 %, защита согласных 0,12, динамика исходника 35 %, «громкость как у исходника» выкл. — как дубли Ravenous Mars 01/04, лучшие на слух.'), 1500);
     } else api('settings', { defaults_092: true }).catch(() => {});
   }
   const ld = S.info.settings.last_ds;

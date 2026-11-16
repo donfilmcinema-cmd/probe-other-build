@@ -298,3 +298,4 @@
 
 .q-cmp td:first-child { white-space: nowrap; }
 .q-cmp .bad { color: #e8857b; } .q-cmp .ok { color: #8fd39a; }
+.q-cmp tr.tu-top td { background: rgba(227,163,94,.10); } .q-cmp tr.tu-top td:nth-child(5) b { color: var(--v7-acc); }

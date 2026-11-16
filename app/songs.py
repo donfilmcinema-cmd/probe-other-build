@@ -15,23 +15,24 @@ import engine as E
 CLEAN_DEFAULTS = {"mix": False, "backing": True, "quality": "max", "dereverb": "uvr", "dereverb_aggr": 50, "denoise": False,
                   "backing_same": False}
 
-# 0.9.2: по умолчанию — как удачные дубли 27.10 (защита согласных 0,15; огибающая 0,65 — динамика исходника ≈ 35 %)
-CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.15, "volume_envelope": 0.65,
+# 0.9.2: по умолчанию — как дубли Ravenous Mars 01/04, лучшие на слух автора (решение sound 17.11):
+# тембр 0,6, защита согласных 0,12, огибающая 0,65 (динамика исходника 35 %), «громкость как у исходника» выкл.
+CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.12, "volume_envelope": 0.65,
                     "f0_method": "rmvpe", "f0_autotune": False, "f0_autotune_strength": 0.4,
                     "clean_audio": False, "clean_strength": 0.4, "split_audio": False,
-                    "proposed_pitch": False, "match_level": True,
+                    "proposed_pitch": False, "match_level": False,
                     "engine": "rvc", "svc_steps": 30, "svc_cfg": 0.7}   # 0.8.1: движок RVC | Seed-VC
 
 BUILTIN_PRESETS = {
     "Стандарт": {},              # = CONVERT_DEFAULTS
     "Надрыв и крик": {"index_rate": 0.5, "protect": 0.2, "volume_envelope": 0.6},
-    "Тихая партия": {"index_rate": 0.7, "protect": 0.12, "volume_envelope": 0.85},
+    "Тихая партия": {"index_rate": 0.7, "protect": 0.08, "volume_envelope": 0.85},
     "Максимум тембра": {"index_rate": 0.85, "protect": 0.33, "volume_envelope": 1.0},
 }
 PRESET_TEXT = {
     "Стандарт": "Средние настройки. Подходит большинству партий — начинайте с него.",
     "Надрыв и крик": "Сохраняет рваную подачу и громкостные удары исходника. Для гранжа, крика, хрипа.",
-    "Тихая партия": "Сильнее бережёт согласные и дыхание (защита 0,12), тембр сильнее. Для мягких куплетов и шёпота.",
+    "Тихая партия": "Сильнее бережёт согласные и дыхание (защита 0,08), тембр сильнее. Для мягких куплетов и шёпота.",
     "Максимум тембра": "Голос максимально похож на модель; защита согласных слабее (0,33). На сложных местах возможны "
                        "призвуки и смазанные слова.",
 }
