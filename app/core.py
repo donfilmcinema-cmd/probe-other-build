@@ -164,13 +164,11 @@ def process(ctx, req):
         # 0.8.2: {"input": исходник, "take": дубль, "voice": код голоса, "convert": {…как у перепевки дубля…},
         #         "lyrics": текст песни, "output": новый дубль?}
         import autofix as AF
-        import songs as SG
-        import voices as V
         for k in ("input", "take", "lyrics"):
             if not req.get(k):
                 raise E.EngineError(f"Нет поля «{k}».")
-        o = dict(SG.CONVERT_DEFAULTS)
-        o.update({k: v for k, v in (req.get("convert") or {}).items() if k in SG.CONVERT_DEFAULTS})
+        o = dict(S.CONVERT_DEFAULTS)
+        o.update({k: v for k, v in (req.get("convert") or {}).items() if k in S.CONVERT_DEFAULTS})
         item = {k: o[k] for k in o if k not in ("match_level", "engine", "svc_steps", "svc_cfg")}
         voice = req.get("voice")
         if voice and o.get("engine") != "seedvc":
