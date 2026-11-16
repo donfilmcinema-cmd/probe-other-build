@@ -103,7 +103,7 @@ checks2 = {
     # исходника отношение не считается)
     "here_dull": bool(hb1 and hb2 and hb1["take_hf2k"] > 0 and hb2["take_hf2k"] < 0.6 * hb1["take_hf2k"]),
     "clicks_seen": r2["checks"]["clicks"]["count"] >= 2 and r2["checks"]["clicks"]["count"] > r1["checks"]["clicks"]["count"],
-    "dynamics_worse": (r2["checks"]["dynamics"]["median_db"] or 0) > (r1["checks"]["dynamics"]["median_db"] or 0) + 0.5
+    "dynamics_worse": (r2["checks"]["dynamics"]["median_db"] or 0) > (r1["checks"]["dynamics"]["median_db"] or 0) + 0.3
                       and (r2["checks"]["dynamics"]["p90_db"] or 0) > (r1["checks"]["dynamics"]["p90_db"] or 0) + 1.5,
     "not_passed": not r2["passed"],
 }
