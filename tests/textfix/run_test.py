@@ -58,7 +58,7 @@ run(EXEC_PY, WORK / "executor_worker.py",
     {"midi": str(REPO / "tests/executor/two_phrases.mid"), "src_dir": str(W / "soulx"), "model": str(W / "models/model.pt"),
      "prompt_wav": str(W / "en_prompt.wav"), "prompt_meta": str(W / "soulx/example/audio/en_prompt.json"),
      "out_wav": str(OUT / "clean.wav"), "meta_out": str(OUT / "meta.json"), "notes_out": str(OUT / "notes.json"),
-     "seg_dir": str(OUT / "segs"), "cache_dir": str(OUT / "cache"), "fp16": False, "device": "cpu",
+     "seg_dir": str(OUT / "segs"), "cache_dir": str(OUT / "cache"), "fp16": False, "device": "cpu", "seed": 7,
      "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
 x, sr = sf.read(OUT / "clean.wav", dtype="float64")
 x = x if x.ndim == 1 else x.mean(1)
@@ -210,7 +210,7 @@ run(EXEC_PY, WORK / "executor_worker.py",
     {"midi": str(OUT / "never.mid"), "src_dir": str(W / "soulx"), "model": str(W / "models/model.pt"),
      "prompt_wav": str(W / "en_prompt.wav"), "prompt_meta": str(W / "soulx/example/audio/en_prompt.json"),
      "out_wav": str(OUT / "never_clean.wav"), "meta_out": str(OUT / "meta_n.json"), "notes_out": str(OUT / "notes_n.json"),
-     "seg_dir": str(OUT / "segs_n"), "cache_dir": str(OUT / "cache"), "fp16": False, "device": "cpu",
+     "seg_dir": str(OUT / "segs_n"), "cache_dir": str(OUT / "cache"), "fp16": False, "device": "cpu", "seed": 7,
      "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
 run(APPLIO_PY, WORK / "applio_worker.py",
     {"items": [dict(item, input=str(OUT / "never_clean.wav"), output=str(OUT / "take_never.wav"))]}, cwd=str(W / "applio"))
@@ -279,7 +279,7 @@ def sing(word, tag):
          "prompt_wav": str(W / "en_prompt.wav"), "prompt_meta": str(W / "soulx/example/audio/en_prompt.json"),
          "out_wav": str(OUT / f"{tag}_clean.wav"), "meta_out": str(OUT / f"meta_{tag}.json"),
          "notes_out": str(OUT / f"notes_{tag}.json"), "seg_dir": str(OUT / f"segs_{tag}"), "cache_dir": str(OUT / "cache"),
-         "fp16": False, "device": "cpu", "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
+         "fp16": False, "device": "cpu", "seed": 7, "style": "straight", "vibrato": 30}, cwd=str(W / "soulx"))
     run(APPLIO_PY, WORK / "applio_worker.py",
         {"items": [dict(item, input=str(OUT / f"{tag}_clean.wav"), output=str(OUT / f"{tag}_take.wav"))]}, cwd=str(W / "applio"))
 

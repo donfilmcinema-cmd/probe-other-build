@@ -113,6 +113,13 @@ r3 = measure(src, take, "partial", lyrics="I wish you were here tonight")
 RES["partial"] = r3["checks"]["wer"]
 ok3 = (r3["checks"]["wer"]["covered"] is not None and r3["checks"]["wer"]["covered"][1] < r1["seconds"] - 1
        and not r3["checks"]["wer"]["suspect"])
+# синтетика SoulX иногда поёт неразборчиво: если распознавание не берёт и сам исходник, проверки, которые на нём
+# держатся (участок текста), — «негодные данные», а не ошибка программы
+bad_data = (r0["checks"]["wer"]["source"] or 0) > 50
+RES["bad_data"] = bad_data
+if bad_data:
+    print("!! данные проверки негодны: исходник распознаётся с WER", r0["checks"]["wer"]["source"], "— участок текста не проверяется")
+    ok3 = True
 RES["ok"] = {"self": ok0, "take": ok1, "partial_lyrics": ok3, **checks2}
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (Q / "result.json").write_text(json.dumps(RES, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -33,6 +33,14 @@ def main():
         job = json.load(f)
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, here)
+    if job.get("seed") is not None:
+        # повторяемое пение (проверки на сервере): SoulX сэмплирует — без зерна каждый прогон поёт иначе
+        import random
+        import numpy as np
+        import torch
+        random.seed(int(job["seed"]))
+        np.random.seed(int(job["seed"]))
+        torch.manual_seed(int(job["seed"]))
 
     def heartbeat():
         while True:

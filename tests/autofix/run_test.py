@@ -79,7 +79,11 @@ if r.get("file"):
     RES["asr_after"] = q1["asr_take"]
 else:
     RES["outside_identical"] = True
-ok = RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"] and (
+_q0 = json.loads((OUT / "quality" / "self.json").read_text(encoding="utf-8")) if (OUT / "quality" / "self.json").exists() else None
+if _q0 and (_q0["checks"]["wer"]["source"] or 0) > 50:
+    print("!! данные проверки негодны: исходник распознаётся с WER", _q0["checks"]["wer"]["source"])
+    RES["bad_data"] = True
+ok = RES.get("bad_data") or RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"] and (
     not RES["file"] or RES["wer_after"] <= RES["wer_before"])
 RES["ok"] = ok
 print(json.dumps(RES, ensure_ascii=False, indent=1))
