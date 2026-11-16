@@ -92,6 +92,8 @@ def run_window(app, url, smoke_log=None, title=TITLE):
     app.picker = picker
 
     def ready():
+        if not state["ready"]:
+            E.log("ОКНО: интерфейс загрузился")
         state["ready"] = True
         if smoke_log:
             log("интерфейс загрузился")
@@ -123,7 +125,21 @@ def run_window(app, url, smoke_log=None, title=TITLE):
                 log("интерфейс не загрузился за 90 секунд")
                 os._exit(3)
         threading.Thread(target=watchdog, daemon=True).start()
+    else:
+        # 0.8.6: окно WebView2 не открылось (зависший прежний процесс, профиль WebView2 занят, нет WebView2) —
+        # через 30 с тот же интерфейс открывается в браузере, а в журнал пишется, что случилось
+        def fallback():
+            time.sleep(30)
+            if not state["ready"]:
+                E.log("ОКНО: интерфейс не загрузился в окне за 30 с (WebView2) — открываю в браузере")
+                try:
+                    webbrowser.open(url)
+                except Exception as ex:  # noqa: BLE001
+                    E.log(f"ОКНО: браузер не открылся: {ex}")
+        threading.Thread(target=fallback, daemon=True).start()
+    E.log("ОКНО: создаю окно WebView2")
     webview.start(gui="edgechromium") if sys.platform == "win32" else webview.start()
+    E.log("ОКНО: закрыто" + ("" if state["ready"] else " (интерфейс так и не загрузился)"))
     if smoke_log:
         log("окно закрыто; результат: " + ("OK" if state["ready"] else "НЕ ЗАГРУЗИЛСЯ"))
         return 0 if state["ready"] else 3
