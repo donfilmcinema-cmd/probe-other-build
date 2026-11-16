@@ -16,10 +16,11 @@ CLEAN_DEFAULTS = {"mix": False, "backing": True, "quality": "max", "dereverb": "
                   "backing_same": False}
 
 # 0.9.2: по умолчанию — как дубли Ravenous Mars 01/04, лучшие на слух автора (решение sound 17.11):
-# тембр 0,6, защита согласных 0,12, огибающая 0,65 (динамика исходника 35 %), «громкость как у исходника» выкл.
+# тембр 0,6, защита согласных 0,12, огибающая 0,65 (динамика исходника 35 %), «громкость как у исходника» выкл.;
+# 0.9.3: и очистка выхода RVC 0,4 — как у всех дублей Ravenous (song.json, письмо sound 17.11 02:35)
 CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.12, "volume_envelope": 0.65,
                     "f0_method": "rmvpe", "f0_autotune": False, "f0_autotune_strength": 0.4,
-                    "clean_audio": False, "clean_strength": 0.4, "split_audio": False,
+                    "clean_audio": True, "clean_strength": 0.4, "split_audio": False,
                     "proposed_pitch": False, "match_level": False,
                     "engine": "rvc", "svc_steps": 30, "svc_cfg": 0.7}   # 0.8.1: движок RVC | Seed-VC
 

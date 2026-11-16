@@ -316,7 +316,7 @@ def run(log=print):
         check("подбор: сетка 3 защиты × 2 тембра", TU.PROTECT == (0.08, 0.12, 0.2) and TU.INDEX == (0.45, 0.6))
         check("0.9.2: по умолчанию защита 0,12, тембр 0,6, огибающая 0,65, громкость как у исходника — выкл.",
               SG.CONVERT_DEFAULTS["protect"] == 0.12 and SG.CONVERT_DEFAULTS["match_level"] is False and SG.CONVERT_DEFAULTS["index_rate"] == 0.6
-              and SG.CONVERT_DEFAULTS["volume_envelope"] == 0.65)
+              and SG.CONVERT_DEFAULTS["volume_envelope"] == 0.65 and SG.CONVERT_DEFAULTS["clean_audio"] is True)
         check("мерило: отчёт — рядом с дублем", Q.report_path(Path("C:/x/дубль 01.wav")).name == "дубль 01 - качество.json")
 
         # --- состояние движка (он здесь не установлен)

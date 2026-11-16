@@ -2173,15 +2173,15 @@ async function boot() {
   const lp = S.presets.find(p => p.name === want);
   applyOpts(lp ? lp.opts : (S.info.settings.last_opts || (S.presets[0] || {}).opts || {}));
   if (!lp && !S.info.settings.last_opts) setPresetSel('Стандарт');
-  if (!S.info.settings.defaults_092) {
+  if (!S.info.settings.defaults_093) {
     // 0.9.2: новые настройки по умолчанию (как удачные дубли 27.10) — один раз переводим панель на «Стандарт»
     const st = S.presets.find(p => p.name === 'Стандарт');
     const userPreset = lp && !lp.builtin;
     if (st && !userPreset) {
       applyOpts(st.opts); setPresetSel('Стандарт');
-      api('settings', { defaults_092: true, last_preset: 'Стандарт', last_opts: S.opts }).catch(() => {});
-      setTimeout(() => toast('0.9.2: настройки перепевки по умолчанию — тембр 60 %, защита согласных 0,12, динамика исходника 35 %, «громкость как у исходника» выкл. — как дубли Ravenous Mars 01/04, лучшие на слух.'), 1500);
-    } else api('settings', { defaults_092: true }).catch(() => {});
+      api('settings', { defaults_093: true, last_preset: 'Стандарт', last_opts: S.opts }).catch(() => {});
+      setTimeout(() => toast('0.9.2: настройки перепевки по умолчанию — тембр 60 %, защита согласных 0,12, динамика исходника 35 %, «громкость как у исходника» выкл., очистка выхода 40 % — как дубли Ravenous Mars 01/04, лучшие на слух.'), 1500);
+    } else api('settings', { defaults_093: true }).catch(() => {});
   }
   const ld = S.info.settings.last_ds;
   if (ld) {
