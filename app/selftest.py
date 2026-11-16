@@ -308,6 +308,15 @@ def run(log=print):
         check("Seed-VC: код едет в программе (без GitHub)",
               (E.WORKERS_SRC / "seedvc_src" / "modules" / "commons.py").exists()
               and (E.WORKERS_SRC / "seedvc_src" / "configs" / "presets" / "config_dit_mel_seed_uvit_whisper_base_f0_44k.yml").exists())
+        import tune as TU
+        import songs as SG
+        _w = [{"w": "a", "t0": t} for t in (1, 2, 3, 50, 51, 52, 53, 54, 55, 56, 80)]
+        _a, _b = TU.densest_window(_w, 120.0)
+        check("подбор: отрывок — где текст плотнее всего", 49 <= _a <= 50 and abs(_b - _a - TU.WIN) < 0.01, f"{_a}–{_b}")
+        check("подбор: сетка 3 защиты × 2 тембра", TU.PROTECT == (0.12, 0.2, 0.33) and TU.INDEX == (0.45, 0.6))
+        check("0.9.2: по умолчанию защита 0,15, тембр 0,6, огибающая 0,65",
+              SG.CONVERT_DEFAULTS["protect"] == 0.15 and SG.CONVERT_DEFAULTS["index_rate"] == 0.6
+              and SG.CONVERT_DEFAULTS["volume_envelope"] == 0.65)
         check("мерило: отчёт — рядом с дублем", Q.report_path(Path("C:/x/дубль 01.wav")).name == "дубль 01 - качество.json")
 
         # --- состояние движка (он здесь не установлен)

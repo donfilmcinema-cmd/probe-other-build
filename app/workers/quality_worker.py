@@ -387,7 +387,12 @@ def run_score(job):
         seg = y[max(0, int(it["t0"] * sr)):int(it["t1"] * sr)]
         g = gcd(int(sr), 16000)
         x16 = resample_poly(seg, 16000 // g, int(sr) // g).astype(np.float32)
-        txt = pipe(x16, generate_kwargs=kw).get("text", "") if len(x16) > 1600 else ""
+        if len(x16) <= 1600:
+            txt = ""
+        elif len(x16) > 16000 * 29:      # 0.9.2: отрывок «Подбора» 35 с — кусками по 30 с
+            txt = pipe(x16, chunk_length_s=30, batch_size=4, generate_kwargs=kw).get("text", "")
+        else:
+            txt = pipe(x16, generate_kwargs=kw).get("text", "")
         hyp = norm_words(txt)
         exp = [w for w in it.get("expect") or []]
         out.append({"text": txt.strip(), "wer": wer(exp, hyp) if exp else None,

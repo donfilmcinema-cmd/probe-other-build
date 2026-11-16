@@ -15,23 +15,25 @@ import engine as E
 CLEAN_DEFAULTS = {"mix": False, "backing": True, "quality": "max", "dereverb": "uvr", "dereverb_aggr": 50, "denoise": False,
                   "backing_same": False}
 
-CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.33, "volume_envelope": 1.0,
+# 0.9.2: по умолчанию — как удачные дубли 27.10 (защита согласных 0,15; огибающая 0,65 — динамика исходника ≈ 35 %)
+CONVERT_DEFAULTS = {"pitch": 0, "index_rate": 0.6, "protect": 0.15, "volume_envelope": 0.65,
                     "f0_method": "rmvpe", "f0_autotune": False, "f0_autotune_strength": 0.4,
                     "clean_audio": False, "clean_strength": 0.4, "split_audio": False,
                     "proposed_pitch": False, "match_level": True,
                     "engine": "rvc", "svc_steps": 30, "svc_cfg": 0.7}   # 0.8.1: движок RVC | Seed-VC
 
 BUILTIN_PRESETS = {
-    "Стандарт": {},
+    "Стандарт": {},              # = CONVERT_DEFAULTS
     "Надрыв и крик": {"index_rate": 0.5, "protect": 0.2, "volume_envelope": 0.6},
-    "Тихая партия": {"index_rate": 0.7, "protect": 0.4, "volume_envelope": 0.85},
-    "Максимум тембра": {"index_rate": 0.85, "protect": 0.33},
+    "Тихая партия": {"index_rate": 0.7, "protect": 0.12, "volume_envelope": 0.85},
+    "Максимум тембра": {"index_rate": 0.85, "protect": 0.33, "volume_envelope": 1.0},
 }
 PRESET_TEXT = {
     "Стандарт": "Средние настройки. Подходит большинству партий — начинайте с него.",
     "Надрыв и крик": "Сохраняет рваную подачу и громкостные удары исходника. Для гранжа, крика, хрипа.",
-    "Тихая партия": "Бережёт дыхание и согласные, тембр сильнее. Для мягких куплетов и шёпота.",
-    "Максимум тембра": "Голос максимально похож на модель. На сложных местах возможны призвуки.",
+    "Тихая партия": "Сильнее бережёт согласные и дыхание (защита 0,12), тембр сильнее. Для мягких куплетов и шёпота.",
+    "Максимум тембра": "Голос максимально похож на модель; защита согласных слабее (0,33). На сложных местах возможны "
+                       "призвуки и смазанные слова.",
 }
 OLD_PRESET_NAMES = {"Ровно": "Стандарт", "Гранж — надрыв": "Надрыв и крик", "Тихий куплет": "Тихая партия"}
 
@@ -480,6 +482,59 @@ def take_quality(ctx, song_id, take_id, lyrics=None):
     v["quality_take"] = take_id
     v["quality"] = rep
     return v
+
+
+def take_tune(ctx, song_id, take_id, lyrics=None):
+    """0.9.2: «Подобрать настройки по тексту» — отрывок с самым плотным текстом, сетка защита × тембр × эпохи,
+    выбор по разборчивости против текста; плюс диагностика чистки (сырой исходник против очищенного)."""
+    import quality as Q
+    import tune as TU
+    s = get(song_id)
+    if lyrics is not None:
+        s.m["lyrics"] = lyrics
+        s.save()
+    lyr = s.m.get("lyrics", "")
+    if not lyr.strip():
+        raise E.EngineError("Нужен текст песни: кнопка «Текст» у дубля → вставьте слова песни.")
+    t, src = _take(s, take_id)
+    if (t.get("opts") or {}).get("engine") == "seedvc":
+        raise E.EngineError("Подбор настроек — для дублей RVC. Выберите дубль RVC.")
+    o = dict(CONVERT_DEFAULTS)
+    o.update({k: v for k, v in (t.get("opts") or {}).items() if k in CONVERT_DEFAULTS})
+    rep = None
+    rp = Q.report_path(s.dir / t["file"])
+    if rp.exists():
+        try:
+            rep = json.loads(rp.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            rep = None
+    raw = s.file("source")
+    tmp = E.new_tmp("tus")
+    try:
+        inp = tmp / "src.wav"
+        A.to_wav(src, inp, mono=True)
+        raw_wav = None
+        if raw and raw.exists() and raw.name != t.get("from"):
+            raw_wav = tmp / "raw.wav"
+            A.to_wav(raw, raw_wav, mono=True)
+        res = TU.tune(ctx, inp, t["voice"], o, lyr, s.dir / "подбор", raw_source=raw_wav, report=rep)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    s = get(song_id)
+    s.m["tune"] = dict({k: v for k, v in res.items() if k != "rows"}, take=take_id, at=time.time())
+    s.save()
+    v = s.view()
+    v["tune"] = res
+    v["tune_take"] = take_id
+    return v
+
+
+def tune_report(song_id):
+    s = get(song_id)
+    f = s.dir / "подбор" / "подбор.json"
+    if not f.exists():
+        return None
+    return json.loads(f.read_text(encoding="utf-8"))
 
 
 def take_quality_report(song_id, take_id):

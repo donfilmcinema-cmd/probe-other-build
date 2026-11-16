@@ -620,6 +620,11 @@ function renderTakes() {
       tx.onclick = () => openText(t);
       acts.appendChild(tx);
     }
+    if (!(t.opts && t.opts.engine === 'seedvc')) {
+      const tb = el('<button class="v7-btn sm" title="Подобрать настройки по тексту песни: отрывок с самым плотным текстом перепевается с разной защитой согласных, тембром и эпохами модели — выбирается самый разборчивый">Подбор</button>');
+      tb.onclick = () => runTune(s, t);
+      acts.appendChild(tb);
+    }
     {
       const q = t.quality;
       const qb = el(`<button class="v7-btn sm q-btn ${q ? (q.passed ? 'ok' : 'bad') : ''}" title="Мерило дубля: разборчивость (распознавание слов), яркость согласных, динамика, щелчки — против исходника и текста песни">${q ? (q.passed ? '✓ Качество' : '✗ Качество') : 'Качество'}</button>`);
@@ -725,6 +730,61 @@ async function showQuality(s, t, rep) {
     playSpan('q_' + k + b.dataset.i, own ? t.path : src, Math.max(0, x.t0 - 0.4), (x.t1 || x.t0) + 0.4);
   });
   if (await pending && canFix) runAutofix(s, t);
+}
+/* ---------- ПОДБОР НАСТРОЕК ПО ТЕКСТУ (0.9.2) ---------- */
+async function runTune(s, t) {
+  const ex = await api('exec_status').catch(() => null);
+  if (ex && !ex.ready) { toast('Для подбора нужен Executor (шаг 4 → «Установить»): в нём распознавание речи.', true); return; }
+  if (!(s.lyrics || '').trim()) { toast('Сначала текст песни: кнопка «Текст» у дубля → вставьте слова.', true); return; }
+  const prev = await api('tune_report', { id: s.id }).catch(() => null);
+  if (prev && prev.report) {
+    const go = await modal({ title: 'Подбор настроек', text: 'Подбор для этой песни уже есть. Показать его или подобрать заново (≈ 18 вариантов отрывка, несколько минут)?', ok: 'Подобрать заново', cancel: 'Показать прежний' });
+    if (!go) { showTune(s, prev.report); return; }
+  }
+  const r = await safe(() => api('take_tune', { id: s.id, take: t.id }));
+  if (r) { S.jobSeen = 0; pollJob(true); }
+}
+function showTune(s, R) {
+  const pc = v => v == null ? '—' : Math.round(v * 100) + ' %';
+  const wr = v => v == null ? '—' : v + ' %';
+  const rows = (R.rows || []).map((r, i) => `<tr class="${i === 0 ? 'best' : ''}"><td><button class="v7-btn sm" data-tp="${i}">▶</button></td>
+    <td>${esc(r.epoch_label)}</td><td>${Math.round(r.index_rate * 100)} %</td><td>${String(r.protect).replace('.', ',')}</td>
+    <td class="${r.wer != null && R.wer_source != null && r.wer <= R.wer_source + 2 ? 'q-ok' : ''}"><b>${wr(r.wer)}</b></td>
+    <td class="${r.bright != null && (r.bright < 0.8 || r.bright > 1.5) ? 'q-bad' : ''}">${pc(r.bright)}</td>
+    <td class="${r.env_db != null && r.env_db > 1.5 ? 'q-bad' : ''}">${r.env_db == null ? '—' : r.env_db + ' дБ'}</td>
+    <td>${r.in_norm ? '✓' : '✗'}</td><td><button class="v7-btn sm" data-ta="${i}">Применить</button></td></tr>`).join('');
+  const b = R.best;
+  const diag = R.wer_raw != null
+    ? `<p class="v7-note"><b>Чистка:</b> сырой исходник ${wr(R.wer_raw)} · очищенный ${wr(R.wer_source)}${R.wer_source - R.wer_raw >= 5 ? ' — <b class="q-bad">чистка съедает слова</b> (попробуйте мягче: без деревера / без удаления бэков)' : ' — чистка слов не теряет'}.</p>`
+    : '<p class="v7-note">Сырой исходник песни не найден или песню не чистили — сравнение чистки не делалось.</p>';
+  const html = `<div class="q-rep">
+    <div class="q-head ${b && b.in_norm ? 'ok' : 'bad'}">Отрывок ${R.window[0].toFixed(1)}–${R.window[1].toFixed(1)} с · ${R.words} сл. текста · исходник ${wr(R.wer_source)}${b ? ` · лучший: ${esc(b.epoch_label)}, тембр ${Math.round(b.index_rate * 100)} %, защита ${String(b.protect).replace('.', ',')} — WER ${wr(b.wer)}` : ''}</div>
+    <div class="v7-row" style="margin:6px 0"><button class="v7-btn sm" data-tp="src">▶ исходник отрывка</button>${R.raw_file ? '<button class="v7-btn sm" data-tp="raw">▶ сырой исходник</button>' : ''}<button class="v7-btn sm" id="tu-folder">Папка вариантов</button></div>
+    ${diag}
+    <table class="q-t q-cmp"><tr><td></td><td>модель</td><td>тембр</td><td>защита</td><td>WER</td><td>яркость</td><td>динамика</td><td>норма</td><td></td></tr>${rows}</table>
+    <p class="v7-note">Порядок: сначала варианты в норме (яркость 80–150 %, динамика ≤ 1,5 дБ), внутри — по разборчивости против текста песни. Защита: меньше — сильнее бережёт согласные. Цифры — подсказка: решает слух.</p>
+    <p class="v7-note">«Применить» ставит тембр и защиту в панель перепевки и делает эту эпоху основной моделью голоса; дальше — «Перепеть» всю песню.</p></div>`;
+  modal({ title: 'Подбор настроек по тексту · ' + s.name, html, cancel: false, ok: 'Закрыть' });
+  const box = $('m-text');
+  const play = (key, path) => { Player.stop(); Player.toggle('tu_' + key, media(path, 0), null); };
+  box.querySelectorAll('[data-tp]').forEach(x => x.onclick = () => {
+    const k = x.dataset.tp;
+    play(k, k === 'src' ? R.source_file : k === 'raw' ? R.raw_file : R.rows[+k].file);
+  });
+  const fb = $('tu-folder'); if (fb) fb.onclick = () => api('open', { path: R.folder });
+  box.querySelectorAll('[data-ta]').forEach(x => x.onclick = () => applyTune(R.rows[+x.dataset.ta], R.voice));
+}
+async function applyTune(r, slug) {
+  applyOpts(Object.assign({}, S.opts, { index_rate: r.index_rate, protect: r.protect, engine: 'rvc' }));
+  setPresetSel('__custom');
+  if (S.info) { S.info.settings.last_opts = Object.assign({}, S.opts); S.info.settings.last_preset = ''; }
+  api('settings', { last_opts: S.opts, last_preset: '' }).catch(() => {});
+  let msg = `Применено: тембр ${Math.round(r.index_rate * 100)} %, защита ${String(r.protect).replace('.', ',')}`;
+  if (r.epoch_file && slug) {
+    const ok = await safe(() => api('choose', { slug, file: r.epoch_file }));
+    if (ok) msg += `, основная модель голоса — ${r.epoch_label}`;
+  }
+  toast(msg + '. Теперь «Перепеть» всю песню.');
 }
 async function runAutofix(s, t) {
   let svc = false; try { svc = localStorage.getItem('dzod.autofixSeedvc') === '1'; } catch (e) { /* нет хранилища */ }
@@ -1786,6 +1846,10 @@ async function jobFinished(j) {
         if (t) setTimeout(() => runQuality(r, t), 400);
       }
     }
+    if (j.kind === 'tune' && r.id) {
+      if (S.song && S.song.id === r.id) { S.song = r; renderSong(); }
+      if (r.tune) showTune(r, r.tune);
+    }
     if (j.kind === 'quality' && r.id) {
       if (S.song && S.song.id === r.id) {
         S.song = r; renderSong();
@@ -2109,6 +2173,16 @@ async function boot() {
   const lp = S.presets.find(p => p.name === want);
   applyOpts(lp ? lp.opts : (S.info.settings.last_opts || (S.presets[0] || {}).opts || {}));
   if (!lp && !S.info.settings.last_opts) setPresetSel('Стандарт');
+  if (!S.info.settings.defaults_092) {
+    // 0.9.2: новые настройки по умолчанию (как удачные дубли 27.10) — один раз переводим панель на «Стандарт»
+    const st = S.presets.find(p => p.name === 'Стандарт');
+    const userPreset = lp && !lp.builtin;
+    if (st && !userPreset) {
+      applyOpts(st.opts); setPresetSel('Стандарт');
+      api('settings', { defaults_092: true, last_preset: 'Стандарт', last_opts: S.opts }).catch(() => {});
+      setTimeout(() => toast('0.9.2: настройки перепевки по умолчанию — защита согласных 0,15, тембр 60 %, динамика исходника 35 % (как удачные дубли 27.10).'), 1500);
+    } else api('settings', { defaults_092: true }).catch(() => {});
+  }
   const ld = S.info.settings.last_ds;
   if (ld) {
     $('ds-clean').checked = ld.clean !== false; $('ds-backing').checked = !!ld.backing; $('ds-denoise').checked = !!ld.denoise;

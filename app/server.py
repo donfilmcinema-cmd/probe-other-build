@@ -329,6 +329,12 @@ class App:
             return self.start_job("autofix", "Исправление по тексту песни",
                                   lambda ctx: S.text_autofix(ctx, b["id"], b["take"], b.get("lyrics"),
                                                              b.get("seedvc", False)))
+        if name == "take_tune":
+            # 0.9.2: подобрать настройки RVC по тексту песни
+            return self.start_job("tune", "Подбор настроек по тексту",
+                                  lambda ctx: S.take_tune(ctx, b["id"], b["take"], b.get("lyrics")))
+        if name == "tune_report":
+            return {"report": S.tune_report(b["id"])}
         if name == "take_quality_report":
             return {"report": S.take_quality_report(b["id"], b["take"])}
         if name == "song_clear":
