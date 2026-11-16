@@ -8,6 +8,7 @@
   --request JSON  обработка файла по запросу без окна (для DZOD Studio), см. core.py
   --studio JSON   окно перепевки, открытое из DZOD Studio по Slice; ответ — в result.json, см. revoicer.py
 """
+import json
 import os
 import sys
 import threading
@@ -112,6 +113,20 @@ def run_window(app, url, smoke_log=None, title=TITLE):
         app.allow_close = True
         win.destroy()
 
+    def focus():
+        for f in (lambda: win.restore(), lambda: win.show()):
+            try:
+                f()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            win.on_top = True
+            threading.Timer(0.6, lambda: setattr(win, "on_top", False)).start()
+        except Exception:  # noqa: BLE001
+            pass
+
+    app.focus = focus
+
     app.quit = quit_now
 
     try:
@@ -162,6 +177,9 @@ def main():
         if not req:
             return 2
         return core.run_request(req)
+    plain = not any(a in sys.argv for a in ("--studio", "--smoke-ui", "--browser"))
+    if plain and _focus_running():
+        return 0
     app = server.App(UI)
     title = TITLE
     if "--studio" in sys.argv:
@@ -183,7 +201,9 @@ def main():
         line = (req.get("studio") or {}).get("line")
         title = f"{TITLE} — {line}" if line else TITLE
     httpd, url = server.serve(app)
-    E.log(f"Запуск {TITLE} {E.VERSION}")
+    E.log(f"Запуск {TITLE} {E.VERSION} (PID {os.getpid()})")
+    if plain:
+        _write_instance(httpd.server_address[1], app.token)
     code = 0
     try:
         if "--browser" in sys.argv:
@@ -199,9 +219,59 @@ def main():
                 else:
                     run_browser(app, url)
     finally:
+        if plain:
+            _drop_instance()
         app.close()
         httpd.shutdown()
     return code
+
+
+# ---------- один экземпляр (0.8.7): повторный запуск выводит окно уже открытой программы ----------
+def _instance_file():
+    return E.data_dir() / "instance.json"
+
+
+def _write_instance(port, token):
+    try:
+        _instance_file().write_text(json.dumps({"pid": os.getpid(), "port": port, "token": token,
+                                                "version": E.VERSION}), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _drop_instance():
+    try:
+        f = _instance_file()
+        if f.exists() and json.loads(f.read_text(encoding="utf-8")).get("pid") == os.getpid():
+            f.unlink()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _focus_running():
+    """Есть живой экземпляр — попросить его вывести окно вперёд и не запускать второй. Не отвечает за 3 с —
+    в журнал «не отвечает», запускаем новый."""
+    import urllib.request
+    try:
+        inf = json.loads(_instance_file().read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return False
+    if inf.get("pid") == os.getpid():
+        return False
+    try:
+        rq = urllib.request.Request(f"http://127.0.0.1:{inf['port']}/api/focus", method="POST",
+                                    data=json.dumps({"version": E.VERSION}).encode("utf-8"),
+                                    headers={"X-Token": inf["token"], "Content-Type": "application/json"})
+        with urllib.request.urlopen(rq, timeout=3) as r:
+            ans = json.loads(r.read().decode("utf-8") or "{}")
+        if ans.get("ok"):
+            E.log(f"Уже запущен {TITLE} {ans.get('version')} (PID {ans.get('pid')}) — вывожу его окно вперёд"
+                  + (f"; запускаемая версия {E.VERSION} — в том окне подсказка перезапустить"
+                     if ans.get("version") != E.VERSION else ""))
+            return True
+    except Exception as ex:  # noqa: BLE001
+        E.log(f"Прежний экземпляр (PID {inf.get('pid')}, {inf.get('version')}) не отвечает ({ex}) — запускаю новый")
+    return False
 
 
 if __name__ == "__main__":

@@ -706,7 +706,7 @@ async function showQuality(s, t, rep) {
     ${(rep.problems_also_in_source || []).length ? `<p class="v7-note">Ещё ${rep.problems_also_in_source.length} сл. не распознаны и в исходнике — не в счёт дубля.</p>` : ''}
     ${worst ? `<h6>Тусклые слова (согласные потерялись)</h6><table class="q-t">${worst}</table>` : ''}
     ${artRows ? `<h6>Артефакты (${arts.length})</h6><table class="q-t">${artRows}</table>` : ''}
-    ${harsh ? `<p class="v7-note">Резкие согласные (шипящие дубля заметно ярче исходника): ${harsh} — не призвук, дело деэссера.</p>` : ''}
+    <p class="v7-note">Резкие согласные (шипящие дубля заметно ярче исходника там, где шипит и исходник): ${harsh}${harsh ? ' — не призвук, дело деэссера' : ''}. «Всплеск ВЧ» — дубль яркий там, где исходник не шипит.</p>
     <p class="v7-note">«Металл» (плоскость спектра, дубль / исходник): ${rep.metal_ratio ?? '—'}. ${c.wer.against === 'текст автора' ? '' : 'Введите текст песни (кнопка «Текст») — разборчивость будет считаться против него.'}</p>
     <details><summary>Распознано</summary><p class="v7-note"><b>Исходник:</b> ${esc(rep.asr_source)}</p><p class="v7-note"><b>Дубль:</b> ${esc(rep.asr_take)}</p></details>
     <p class="v7-note">Отчёт: ${esc((t.path || '').replace(/\.wav$/i, '') + ' - качество.json')}</p></div>`;
@@ -2132,7 +2132,7 @@ async function boot() {
   else setTab(!S.info.engine.ready ? 'engine' : (!hasModel ? 'voice' : 'song'));
   if (S.job && S.job.state === 'running') pollJob();
   else pollTimer = setTimeout(pollJob, 3000);
-  setInterval(() => api('ping').catch(() => {}), 4000);
+  setInterval(() => api('ping').then(r => { if (r && r.notice) toast(r.notice, true); }).catch(() => {}), 4000);
   api('ready').catch(() => {});
 }
 boot().catch(e => toast('Не удалось запустить интерфейс: ' + e.message, true));

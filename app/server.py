@@ -59,6 +59,8 @@ class App:
         self.media = set()
         self.ctx = None
         self.session = None          # окно открыто из DZOD Studio (revoicer.Session)
+        self.focus = None            # вывести окно вперёд (повторный запуск)
+        self.notice = None           # сообщение для интерфейса при следующем ping
         self.job = {"id": 0, "state": "idle", "frac": 0.0, "msg": "", "result": None, "error": None,
                     "kind": "", "title": "", "extra": {}, "started": 0}
         threading.Thread(target=self._housekeeping, daemon=True).start()
@@ -162,7 +164,22 @@ class App:
                     "log": str(E.log_path()), "job": self.job_view()}
         if name == "ping":
             self.last_ping = time.time()
-            return {"job": self.job_view()}
+            r = {"job": self.job_view()}
+            if self.notice:
+                r["notice"], self.notice = self.notice, None
+            return r
+        if name == "focus":
+            # 0.8.7: программу запустили ещё раз — этот экземпляр выводит своё окно вперёд
+            nv = b.get("version")
+            if nv and nv != E.VERSION:
+                self.notice = (f"Установлена версия {nv}, а это окно — {E.VERSION}. Закройте это окно "
+                               f"и запустите программу заново.")
+            if self.focus:
+                try:
+                    self.focus()
+                except Exception:  # noqa: BLE001
+                    pass
+            return {"ok": True, "version": E.VERSION, "pid": os.getpid()}
         if name == "ready":
             self.last_ping = time.time()
             if self.on_ready:
