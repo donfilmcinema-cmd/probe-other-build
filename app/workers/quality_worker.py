@@ -29,7 +29,7 @@ def say(kind, payload):
     sys.stdout.flush()
 
 
-TARGET = {"wer_pp": 2.0, "bright": 0.80, "env_db": 1.5, "clicks": 0}
+TARGET = {"wer_pp": 2.0, "bright": 0.80, "bright_max": 1.50, "env_db": 1.5, "clicks": 0, "wer_sane": 50.0}
 
 
 # ------------------------------------------------------------------ текст
@@ -163,7 +163,7 @@ def artifacts(x, y, sr):
 
     hx, fx, dx = frames(x)
     hy, fy, dy = frames(y)
-    res = {"bursts": [], "clicks": [], "metal_ratio": None}
+    res = {"bursts": [], "harsh": [], "clicks": [], "metal_ratio": None}
     if hy is None:
         return res
     m = min(len(hx), len(hy))
@@ -176,8 +176,11 @@ def artifacts(x, y, sr):
             e = k
             while e < m and bad[e]:
                 e += 1
-            res["bursts"].append({"t": round(float(k * h / sr), 3), "dur": round((e - k) * h / sr, 3),
-                                  "hf4k": round(float(hy[k:e].max()), 2), "src_hf4k": round(float(hx[k:e].max()), 2)})
+            ev = {"t": round(float(k * h / sr), 3), "dur": round((e - k) * h / sr, 3),
+                  "hf4k": round(float(hy[k:e].max()), 2), "src_hf4k": round(float(hx[k:e].max()), 2)}
+            # 0.8.3: в исходнике здесь тоже шипящая (доля >4 кГц ≥ 15 %) — это не призвук, а согласная дубля
+            # резче исходника (дело деэссера); иначе — всплеск ВЧ на ровном месте
+            (res["harsh"] if ev["src_hf4k"] >= 0.15 else res["bursts"]).append(ev)
             k = e
         else:
             k += 1
@@ -207,6 +210,7 @@ def artifacts(x, y, sr):
             last = c
         res["clicks"] = res["clicks"][:200]
     res["bursts"] = res["bursts"][:200]
+    res["harsh"] = res["harsh"][:200]
     return res
 
 
@@ -263,6 +267,17 @@ def run(job):
         ref = [dict(w) for w in a_src["words"]]
     rw = [r["w"] for r in ref]
 
+    # 0.8.3: текст автора может покрывать только часть песни (T022: 4 строки из 8) — сверяем только участок,
+    # покрытый текстом по выравниванию (±1 с); распознанное вне участка — «текста нет», в ошибки не идёт
+    cover = None
+    if lyrics:
+        tt = [r["t0"] for r in ref if r["t0"] is not None] + [r["t1"] for r in ref if r["t1"] is not None]
+        if tt:
+            cover = [max(0.0, min(tt) - 1.0), min(n / sr, max(tt) + 1.0)]
+
+            def inside(ws):
+                return [w["w"] for w in ws if w["t0"] is None or (cover[0] <= w["t0"] <= cover[1])]
+            hyp_s, hyp_t = inside(a_src["words"]), inside(a_take["words"])
     wer_take = wer(rw, hyp_t)
     wer_src = wer(rw, hyp_s) if lyrics else 0.0
     # ошибки дубля, которых нет в исходнике
@@ -292,18 +307,24 @@ def run(job):
         s4, t4 = hf_share(Sx, fr, 4000), hf_share(Sy, fr, 4000)
         bright.append({"word": r["w"], "t0": round(r["t0"], 2), "t1": round(r["t1"], 2),
                        "src_hf2k": round(s2, 3), "take_hf2k": round(t2, 3), "src_hf4k": round(s4, 3),
-                       "take_hf4k": round(t4, 3), "ratio": round(t2 / s2, 2) if s2 > 0.02 else None})
+                       "take_hf4k": round(t4, 3), "ratio": round(t2 / s2, 2) if s2 > 0.05 else None})
     ratios = sorted(b["ratio"] for b in bright if b["ratio"] is not None)
     b_med = round(float(np.median(ratios)), 2) if ratios else None
     worst = sorted([b for b in bright if b["ratio"] is not None], key=lambda b: b["ratio"])[:10]
+    brightest = sorted([b for b in bright if b["ratio"] is not None], key=lambda b: -b["ratio"])[:10]
     env = envelope_dev(x, y, sr)
     art = artifacts(x, y, sr)
 
     own = [p for p in problems if not p["also_in_source"]]
     checks = {
         "wer": {"take": wer_take, "source": wer_src, "against": "текст автора" if lyrics else "распознанный исходник",
-                "ok": wer_take is not None and wer_take <= (wer_src or 0.0) + TARGET["wer_pp"] + (0 if lyrics else 3.0)},
-        "brightness": {"median_ratio": b_med, "ok": b_med is not None and b_med >= TARGET["bright"]},
+                "covered": cover, "words": len(rw),
+                # WER > 50 % и у исходника — ошибка самой сверки (не тот текст, не тот язык), а не «всё хорошо»
+                "suspect": wer_take is not None and max(wer_take, wer_src or 0) > TARGET["wer_sane"],
+                "ok": wer_take is not None and wer_take <= (wer_src or 0.0) + TARGET["wer_pp"] + (0 if lyrics else 3.0)
+                and max(wer_take, wer_src or 0) <= TARGET["wer_sane"]},
+        "brightness": {"median_ratio": b_med, "too_bright": b_med is not None and b_med > TARGET["bright_max"],
+                       "ok": b_med is not None and TARGET["bright"] <= b_med <= TARGET["bright_max"]},
         "dynamics": {**(env or {}), "ok": env is not None and env["median_db"] <= TARGET["env_db"]},
         "clicks": {"count": len(art["clicks"]), "ok": len(art["clicks"]) <= TARGET["clicks"]},
     }
@@ -312,8 +333,8 @@ def run(job):
         "seconds": round(n / sr, 2), "time_s": round(time.time() - t_all, 1), "target": TARGET,
         "checks": checks, "passed": all(c["ok"] for c in checks.values()),
         "problems": own, "problems_also_in_source": [p for p in problems if p["also_in_source"]],
-        "brightness_worst": worst, "brightness_words": bright,
-        "bursts": art["bursts"], "clicks": art["clicks"], "metal_ratio": art["metal_ratio"],
+        "brightness_worst": worst, "brightness_brightest": brightest, "brightness_words": bright,
+        "bursts": art["bursts"], "harsh": art["harsh"], "clicks": art["clicks"], "metal_ratio": art["metal_ratio"],
         "asr_source": a_src["text"], "asr_take": a_take["text"],
         "ref_words": [{"w": r["w"], "t0": None if r["t0"] is None else round(r["t0"], 3),
                        "t1": None if r["t1"] is None else round(r["t1"], 3)} for r in ref],

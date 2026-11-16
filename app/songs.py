@@ -463,6 +463,12 @@ def take_quality(ctx, song_id, take_id, lyrics=None):
         inp = tmp / "src.wav"
         A.to_wav(src, inp, mono=True)
         rep = Q.measure(ctx, inp, s.dir / t["file"], s.m.get("lyrics", ""), out=Q.report_path(s.dir / t["file"]))
+        # дубль после «Текста» / «по тексту»: щелчок у стыка вклейки (±0,1 с) — отметить, чтобы было видно, чей он
+        seams = [x for c in (t.get("changed") or []) for x in c]
+        if seams and rep.get("clicks"):
+            for c in rep["clicks"]:
+                c["seam"] = any(abs(c["t"] - x) <= 0.1 for x in seams)
+            Q.report_path(s.dir / t["file"]).write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     s = get(song_id)

@@ -686,8 +686,8 @@ async function showQuality(s, t, rep) {
   const mk = ok => ok ? '<b class="q-ok">✓</b>' : '<b class="q-bad">✗</b>';
   const pc = v => v == null ? '—' : Math.round(v * 100) + '%';
   const rows = [
-    [c.wer.ok, 'Разборчивость (WER)', `${c.wer.take ?? '—'} % · исходник ${c.wer.source ?? '—'} % · против: ${esc(c.wer.against)}`, `≤ исходник + ${T.wer_pp} п.п.`],
-    [c.brightness.ok, 'Яркость слов (>2 кГц)', `${pc(c.brightness.median_ratio)} от исходника (медиана по словам)`, `≥ ${Math.round(T.bright * 100)}%`],
+    [c.wer.ok, 'Разборчивость (WER)', `${c.wer.take ?? '—'} % · исходник ${c.wer.source ?? '—'} % · против: ${esc(c.wer.against)}${c.wer.covered ? ` (${c.wer.words} сл., ${c.wer.covered[0].toFixed(0)}–${c.wer.covered[1].toFixed(0)} с — дальше текста нет)` : ''}${c.wer.suspect ? ' — <b class="q-bad">сверка не удалась: проверьте текст и язык</b>' : ''}`, `≤ исходник + ${T.wer_pp} п.п.`],
+    [c.brightness.ok, 'Яркость слов (>2 кГц)', `${pc(c.brightness.median_ratio)} от исходника (медиана по словам)${c.brightness.too_bright ? ' — переярко: согласные резче исходника (деэссер)' : ''}`, `${Math.round(T.bright * 100)}–${Math.round((T.bright_max || 1.5) * 100)}%`],
     [c.dynamics.ok, 'Динамика (огибающая 20 мс)', `${c.dynamics.median_db ?? '—'} дБ · p90 ${c.dynamics.p90_db ?? '—'} дБ`, `≤ ${T.env_db} дБ`],
     [c.clicks.ok, 'Щелчки', `${c.clicks.count}`, '0'],
   ];
@@ -696,7 +696,8 @@ async function showQuality(s, t, rep) {
   const span = (x, i, kind) => x.t0 == null ? '' : `<button class="v7-btn sm" data-q="${kind}" data-i="${i}">▶ дубль</button><button class="v7-btn sm" data-q="${kind}s" data-i="${i}">▶ исходник</button>`;
   const probs = rep.problems.map((p, i) => `<tr><td>${tm(p.t0)}</td><td><b>${esc(p.word)}</b></td><td>${p.kind}${p.heard ? ' → «' + esc(p.heard) + '»' : ''}</td><td>${span(p, i, 'p')}</td></tr>`).join('');
   const worst = (rep.brightness_worst || []).filter(b => b.ratio != null && b.ratio < T.bright).map((b, i) => `<tr><td>${tm(b.t0)}</td><td><b>${esc(b.word)}</b></td><td>${pc(b.ratio)} (${pc(b.take_hf2k)} / ${pc(b.src_hf2k)})</td><td>${span(b, i, 'b')}</td></tr>`).join('');
-  const arts = [...(rep.clicks || []).map(x => ({ t0: x.t, t1: x.t + 0.05, k: 'щелчок' })), ...(rep.bursts || []).map(x => ({ t0: x.t, t1: x.t + x.dur, k: 'всплеск ВЧ' }))].sort((a, b) => a.t0 - b.t0);
+  const arts = [...(rep.clicks || []).map(x => ({ t0: x.t, t1: x.t + 0.05, k: 'щелчок' + (x.seam ? ' (на стыке вклейки)' : '') })), ...(rep.bursts || []).map(x => ({ t0: x.t, t1: x.t + x.dur, k: 'всплеск ВЧ' }))].sort((a, b) => a.t0 - b.t0);
+  const harsh = (rep.harsh || []).length;
   const artRows = arts.slice(0, 30).map((a, i) => `<tr><td>${tm(a.t0)}</td><td>${a.k}</td><td></td><td>${span(a, i, 'a')}</td></tr>`).join('');
   const html = `<div class="q-rep">
     <div class="q-head ${rep.passed ? 'ok' : 'bad'}">${rep.passed ? 'Цели приёмки выполнены' : 'Не все цели выполнены'} · дубль ${String(t.num).padStart(2, '0')} · ${fmtTime(rep.seconds)} · проверка ${rep.time_s} с</div>
@@ -705,6 +706,7 @@ async function showQuality(s, t, rep) {
     ${(rep.problems_also_in_source || []).length ? `<p class="v7-note">Ещё ${rep.problems_also_in_source.length} сл. не распознаны и в исходнике — не в счёт дубля.</p>` : ''}
     ${worst ? `<h6>Тусклые слова (согласные потерялись)</h6><table class="q-t">${worst}</table>` : ''}
     ${artRows ? `<h6>Артефакты (${arts.length})</h6><table class="q-t">${artRows}</table>` : ''}
+    ${harsh ? `<p class="v7-note">Резкие согласные (шипящие дубля заметно ярче исходника): ${harsh} — не призвук, дело деэссера.</p>` : ''}
     <p class="v7-note">«Металл» (плоскость спектра, дубль / исходник): ${rep.metal_ratio ?? '—'}. ${c.wer.against === 'текст автора' ? '' : 'Введите текст песни (кнопка «Текст») — разборчивость будет считаться против него.'}</p>
     <details><summary>Распознано</summary><p class="v7-note"><b>Исходник:</b> ${esc(rep.asr_source)}</p><p class="v7-note"><b>Дубль:</b> ${esc(rep.asr_take)}</p></details>
     <p class="v7-note">Отчёт: ${esc((t.path || '').replace(/\.wav$/i, '') + ' - качество.json')}</p></div>`;

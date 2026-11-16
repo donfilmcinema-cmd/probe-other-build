@@ -57,7 +57,7 @@ src = OUT / "clean.wav"
 take = OUT / "take_clean.wav"
 # 0) сам с собой
 r0 = measure(src, src, "self")
-ok0 = (r0["checks"]["wer"]["take"] == r0["checks"]["wer"]["source"] and r0["checks"]["brightness"]["median_ratio"] == 1.0
+ok0 = (r0["checks"]["wer"]["take"] == r0["checks"]["wer"]["source"] and r0["checks"]["brightness"]["median_ratio"] in (1.0, None)
        and (r0["checks"]["dynamics"].get("median_db") or 0) < 0.05 and r0["checks"]["clicks"]["count"] == 0
        and not r0["problems"])
 RES["self"] = r0["checks"]
@@ -108,7 +108,12 @@ checks2 = {
     "not_passed": not r2["passed"],
 }
 RES["bad_checks"] = checks2
-RES["ok"] = {"self": ok0, "take": ok1, **checks2}
+# 3) текст только на часть песни (как T022 у автора: 4 строки из 8) — сверка лишь по участку текста
+r3 = measure(src, take, "partial", lyrics="I wish you were here tonight")
+RES["partial"] = r3["checks"]["wer"]
+ok3 = (r3["checks"]["wer"]["covered"] is not None and r3["checks"]["wer"]["covered"][1] < r1["seconds"] - 1
+       and not r3["checks"]["wer"]["suspect"])
+RES["ok"] = {"self": ok0, "take": ok1, "partial_lyrics": ok3, **checks2}
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (Q / "result.json").write_text(json.dumps(RES, ensure_ascii=False, indent=1), encoding="utf-8")
 ok = all(RES["ok"].values())
