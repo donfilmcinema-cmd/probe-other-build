@@ -290,6 +290,19 @@ def run(log=print):
               and [o[0] for o in _QW.edit_ops(["a", "b", "c"], ["a", "x"])] in (["ok", "sub", "del"], ["ok", "del", "sub"]))
         check("мерило: текст нормализуется (ё, апострофы, метки частей)",
               _QW.norm_words("[Chorus] Ёлка, you’re HERE!") == ["елка", "you're", "here"])
+        import autofix as AFX
+        import numpy as _np
+        _r = AFX._regions([{"t0": 1.0, "t1": 1.4}, {"t0": 1.8, "t1": 2.1}, {"t0": 5, "t1": 5.3}], 10)
+        check("по тексту: окна слов сливаются, отрезки вклейки — по словам",
+              len(_r) == 2 and _r[0]["words"] == [0, 1] and len(_r[0]["spans"]) == 2, str(_r))
+        _sr = 16000
+        _t = _np.arange(_sr) / _sr
+        _x = 0.3 * _np.sin(2 * _np.pi * 200 * _t)
+        _x[int(.4 * _sr):int(.55 * _sr)] = 0.1 * _np.random.default_rng(0).standard_normal(int(.15 * _sr))
+        _m = AFX.consonant_mask(_x, _sr)
+        check("по тексту: глухие кадры (шум) — 1, голос — 0",
+              _m[:int(.3 * _sr)].mean() < 0.05 and _m[int(.43 * _sr):int(.52 * _sr)].mean() > 0.9)
+        check("по тексту: запрос autofix", "autofix" in C.ACTIONS)
         check("мерило: отчёт — рядом с дублем", Q.report_path(Path("C:/x/дубль 01.wav")).name == "дубль 01 - качество.json")
 
         # --- состояние движка (он здесь не установлен)

@@ -307,6 +307,10 @@ class App:
             # мерило дубля (0.8.0): разборчивость, яркость, динамика, артефакты
             return self.start_job("quality", "Проверка качества",
                                   lambda ctx: S.take_quality(ctx, b["id"], b["take"], b.get("lyrics")))
+        if name == "text_autofix":
+            # 0.8.2: сверить дубль с текстом и переделать разошедшиеся слова
+            return self.start_job("autofix", "Исправление по тексту песни",
+                                  lambda ctx: S.text_autofix(ctx, b["id"], b["take"], b.get("lyrics")))
         if name == "take_quality_report":
             return {"report": S.take_quality_report(b["id"], b["take"])}
         if name == "song_clear":

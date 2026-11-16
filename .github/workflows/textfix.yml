@@ -77,11 +77,15 @@ jobs:
           python -m zipfile -e w/seedvc.zip w/ && mv w/seed-vc-* w/seedvc
           w/venv_exec/bin/pip install -q "munch==4.0.0" "einops==0.8.0" pyyaml matplotlib "numpy<2.0.0"
           w/venv_test/bin/python tests/seedvc/run_test.py w w/seedvc w/whisper-small
+      - name: Вся песня по тексту (0.8.2)
+        if: ${{ !cancelled() }}
+        run: |
+          w/venv_test/bin/python tests/autofix/run_test.py w w/whisper-small w/seedvc
       - name: Результат — в ветку debug-textfix
         if: always()
         run: |
           set +e
-          mkdir -p /tmp/dbg; cp w/out/*.json /tmp/dbg/ 2>/dev/null; cp w/out/quality/*.json /tmp/dbg/ 2>/dev/null; cp w/out/bench/*.json w/out/bench/*.wav /tmp/dbg/ 2>/dev/null
+          mkdir -p /tmp/dbg; cp w/out/*.json /tmp/dbg/ 2>/dev/null; cp w/out/quality/*.json /tmp/dbg/ 2>/dev/null; cp w/out/bench/*.json w/out/bench/*.wav /tmp/dbg/ 2>/dev/null; cp w/out/autofix/*.json w/out/autofix/*.wav /tmp/dbg/ 2>/dev/null
           for d in w/out/tmp_tf_*; do n=$(basename $d); for f in plan.json regions.json hint.wav content.wav hint.mid; do cp $d/$f /tmp/dbg/${n}_$f 2>/dev/null; done; cp $d/reg/*_out.wav /tmp/dbg/ 2>/dev/null; done
           cp w/out/ru_*.wav w/out/replaced.wav w/out/poom_*.wav w/out/pay_*.wav w/out/clean.wav w/out/dirty.wav w/out/take_dirty.wav w/out/take_clean.wav w/out/fixed.wav /tmp/dbg/ 2>/dev/null
           set -e

@@ -598,7 +598,7 @@ function renderTakes() {
     const srcFile = (s.files.find(f => f.name === t.from) || {}).path || srcPath;
     const part = t.part === 'лид' ? 'вокал' : t.part;
     const best = s.best === t.id;
-    const fixed = t.fixed_from_num ? ` · текст по № ${String(t.fixed_from_num).padStart(2, '0')}` : '';
+    const fixed = t.fixed_from_num ? (t.autofix ? ` · по тексту из № ${String(t.fixed_from_num).padStart(2, '0')}` : ` · текст по № ${String(t.fixed_from_num).padStart(2, '0')}`) : '';
     const row = el(`<div class="v7-tk ${S.newTakes.has(t.id) ? 'new' : ''} ${best ? 'best' : ''}" title="${esc(t.file)}">
       <span></span>
       <div class="nm"><b>Дубль ${String(t.num).padStart(2, '0')} · ${esc(part)}${esc(fixed)}</b><small>${esc(t.voice_name)} · ${esc(optsLine(t.opts))}</small></div>
@@ -708,13 +708,31 @@ async function showQuality(s, t, rep) {
     <p class="v7-note">«Металл» (плоскость спектра, дубль / исходник): ${rep.metal_ratio ?? '—'}. ${c.wer.against === 'текст автора' ? '' : 'Введите текст песни (кнопка «Текст») — разборчивость будет считаться против него.'}</p>
     <details><summary>Распознано</summary><p class="v7-note"><b>Исходник:</b> ${esc(rep.asr_source)}</p><p class="v7-note"><b>Дубль:</b> ${esc(rep.asr_take)}</p></details>
     <p class="v7-note">Отчёт: ${esc((t.path || '').replace(/\.wav$/i, '') + ' - качество.json')}</p></div>`;
-  const pending = modal({ title: 'Качество дубля', html, ok: 'Проверить заново', cancel: 'Закрыть' });
+  const canFix = rep.lyrics_used && rep.problems.length;
+  const html2 = html.replace('<div class="q-rep">', `<div class="q-rep"><div class="v7-row" style="margin:0 0 8px"><button class="v7-btn sm" id="q-again">Проверить заново</button>${canFix ? '<span class="v7-note">Слова, которые разошлись с текстом, программа может переделать сама — новым дублем.</span>' : (rep.lyrics_used ? '' : '<span class="v7-note">Введите текст песни («Текст») — тогда слова можно будет исправить по тексту.</span>')}</div>`);
+  const pending = modal({ title: 'Качество дубля', html: html2, ok: canFix ? `Исправить слова по тексту (${rep.problems.length})` : 'Закрыть', cancel: canFix ? 'Закрыть' : false });
+  const again = $('q-again');
+  if (again) again.onclick = () => { $('m-cancel').hidden = false; $('m-cancel').click(); runQuality(s, t); };
   const lists = { p: rep.problems, b: (rep.brightness_worst || []).filter(b => b.ratio != null && b.ratio < T.bright), a: arts };
   $('m-text').querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
     const k = b.dataset.q, own = k.length === 1, x = lists[k[0]][+b.dataset.i];
     playSpan('q_' + k + b.dataset.i, own ? t.path : src, Math.max(0, x.t0 - 0.4), (x.t1 || x.t0) + 0.4);
   });
-  if (await pending) runQuality(s, t);
+  if (await pending && canFix) runAutofix(s, t);
+}
+async function runAutofix(s, t) {
+  const r = await safe(() => api('text_autofix', { id: s.id, take: t.id }));
+  if (r) { S.jobSeen = 0; pollJob(true); }
+}
+function showAutofix(song, r) {
+  const a = r.autofix || {};
+  const ws = a.words || [];
+  const tm = v => v == null ? '?' : v.toFixed(1) + ' с';
+  const rows = ws.map(w => `<tr><td>${tm(w.t0)}</td><td><b>${esc(w.word)}</b></td><td class="${w.fixed ? 'q-ok' : 'q-bad'}">${w.fixed ? '✓ ' + esc(w.method) : (w.chosen === 'take' ? '✗ не вышло — оставлено как было' : '≈ ' + esc(w.method))}</td><td class="v7-note">было: «${esc(w.before)}»${w.chosen !== 'take' ? '<br>стало: «' + esc(w.after) + '»' : ''}</td></tr>`).join('');
+  const head = a.note ? esc(a.note) : `Слов с ошибкой: ${ws.length} · исправлено: ${a.fixed || 0} · осталось: ${a.left || 0}` + (a.file ? ' · новый дубль готов, прежний не тронут' : ' · новый дубль не нужен — ни один вариант не оказался лучше');
+  modal({ title: 'Исправление по тексту песни', cancel: false, ok: 'Закрыть',
+    html: `<div class="q-rep"><div class="q-head ${(a.left || 0) === 0 ? 'ok' : 'bad'}">${head}</div>${rows ? `<table class="q-t">${rows}</table>` : ''}
+    <p class="v7-note">Способы: «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — место перепето Seed-VC. Выбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста. Оставшиеся слова — послушайте и при необходимости поправьте пометкой в «Тексте».</p></div>` });
 }
 /* Сравнение дублей (0.8.1): таблица цифр «Качества» по всем дублям песни — RVC против Seed-VC */
 $('takes-table').onclick = () => {
@@ -832,12 +850,22 @@ function renderText() {
       <div class="v7-card"><h5><b>2</b>Пометки<i></i><em id="tx-cnt"></em></h5><div class="tx-marks" id="tx-marks"></div></div>
     </div>
     <div class="tx-foot"><button class="v7-btn go big" id="tx-fix">Исправить по тексту</button>
+      <button class="v7-btn big" id="tx-all" title="Без пометок: программа сверит весь дубль с текстом песни (распознавание речи) и сама переделает слова, которые разошлись. Новый дубль, прежний не трогается">Вся песня по тексту</button>
       <div class="prog"><i id="tx-pg"></i></div><span class="v7-note" id="tx-note"></span></div>`;
   segSet('tx-mode', T.mode);
   segBind('tx-mode', v => { txSyncEdit(); T.mode = v; renderText(); });
   $('tx-close').onclick = () => { txSyncEdit(); closeText(); };
   $('tx-an').onclick = txAnalyze;
   $('tx-fix').onclick = txFix;
+  $('tx-all').onclick = async () => {
+    txSyncEdit();
+    if (!(T.lyrics || '').trim()) { toast('Вставьте текст песни (режим «Правка текста»).', true); return; }
+    await api('song_lyrics', { id: S.song.id, lyrics: T.lyrics }).catch(() => {});
+    S.song.lyrics = T.lyrics;
+    const song = S.song, take = T.take;
+    closeText();
+    runAutofix(song, take);
+  };
   const body = $('tx-body');
   if (T.mode === 'edit') {
     const ta = el('<textarea class="tx-edit" id="tx-edit" spellcheck="false" placeholder="Вставьте текст песни — как поётся. Метки [Verse 1], [Chorus] можно оставить."></textarea>');
@@ -1742,6 +1770,15 @@ async function jobFinished(j) {
       loadSongs();
     }
     if (j.kind === 'text') txJobDone(j);
+    if (j.kind === 'autofix' && r.id) {
+      (r.made || []).forEach(x => S.newTakes.add(x));
+      if (S.song && S.song.id === r.id) { S.song = r; renderSong(); }
+      showAutofix(r, r);
+      if (autoQuality() && (r.made || []).length) {
+        const t = (r.takes || []).find(x => x.id === r.made[0]);
+        if (t) setTimeout(() => runQuality(r, t), 400);
+      }
+    }
     if (j.kind === 'quality' && r.id) {
       if (S.song && S.song.id === r.id) {
         S.song = r; renderSong();

@@ -486,3 +486,64 @@ def take_quality_report(song_id, take_id):
     if not f.exists():
         return None
     return json.loads(f.read_text(encoding="utf-8"))
+
+
+def text_autofix(ctx, song_id, take_id, lyrics=None):
+    """0.8.2: сверить дубль с текстом песни и переделать слова, которые разошлись. Новый дубль «… - по тексту NN»."""
+    import autofix as AF
+    import quality as Q
+    import voices as V
+    s = get(song_id)
+    if lyrics is not None:
+        s.m["lyrics"] = lyrics
+        s.save()
+    lyr = s.m.get("lyrics", "")
+    if not lyr.strip():
+        raise E.EngineError("Нужен текст песни: кнопка «Текст» у дубля → вставьте слова песни.")
+    t, src = _take(s, take_id)
+    eng = (t.get("opts") or {}).get("engine") or "rvc"
+    o = dict(CONVERT_DEFAULTS)
+    o.update({k: v for k, v in (t.get("opts") or {}).items() if k in CONVERT_DEFAULTS})
+    item = {k: o[k] for k in o if k not in ("match_level", "engine", "svc_steps", "svc_cfg")}
+    try:
+        model, index = V.model_files(t["voice"])
+        item.update(model=str(model), index=str(index or ""))
+    except E.EngineError:
+        if eng != "seedvc":
+            raise
+        item.update(model="", index="")
+    rep = None
+    rp = Q.report_path(s.dir / t["file"])
+    if rp.exists():
+        try:
+            rep = json.loads(rp.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            rep = None
+    takes = s.m.setdefault("takes", [])
+    num = 1 + max([x.get("num", 0) for x in takes] + [0])
+    fname = f"{Path(t['file']).stem} - по тексту {num:02d}.wav"
+    tmp = E.new_tmp("afx")
+    try:
+        inp = tmp / "src.wav"
+        A.to_wav(src, inp, mono=True)
+        r = AF.fix(ctx, inp, s.dir / t["file"], item, lyr, s.dir / fname, voice=t["voice"], report=rep,
+                   engine_take=eng)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    s = get(song_id)
+    v = None
+    if r.get("file"):
+        nt = dict(t, id=f"t{int(time.time() * 1000)}atx", num=num, file=fname, made=time.time(),
+                  fixed_from=t["id"], fixed_from_num=t.get("num"), autofix=True, changed=r.get("changed", []),
+                  autofix_words=r.get("words", []))
+        nt.pop("quality", None)
+        s.m.setdefault("takes", []).append(nt)
+        s.save()
+        v = s.view()
+        v["made"] = [nt["id"]]
+    else:
+        v = s.view()
+        v["made"] = []
+    v["autofix"] = r
+    v["autofix_from"] = t["id"]
+    return v

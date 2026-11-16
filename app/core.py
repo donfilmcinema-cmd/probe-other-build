@@ -43,7 +43,7 @@ import songs as S
 import voices as V
 
 API_VERSION = 2                       # 1 и 2 (sing v2: params/styles/curves/range); старше — «обновите»
-ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe", "text_analyze", "revoice_text", "quality")
+ACTIONS = ("convert", "clean", "clean_convert", "voices", "status", "sing", "transcribe", "text_analyze", "revoice_text", "quality", "autofix")
 
 
 def _progress_writer(path):
@@ -160,6 +160,28 @@ def process(ctx, req):
                         req.get("output"))
         return {"ok": True, "report": str(req.get("output") or Q.report_path(req["take"])),
                 "passed": rep["passed"], "checks": rep["checks"], "problems": rep["problems"]}
+    if action == "autofix":
+        # 0.8.2: {"input": исходник, "take": дубль, "voice": код голоса, "convert": {…как у перепевки дубля…},
+        #         "lyrics": текст песни, "output": новый дубль?}
+        import autofix as AF
+        import songs as SG
+        import voices as V
+        for k in ("input", "take", "lyrics"):
+            if not req.get(k):
+                raise E.EngineError(f"Нет поля «{k}».")
+        o = dict(SG.CONVERT_DEFAULTS)
+        o.update({k: v for k, v in (req.get("convert") or {}).items() if k in SG.CONVERT_DEFAULTS})
+        item = {k: o[k] for k in o if k not in ("match_level", "engine", "svc_steps", "svc_cfg")}
+        voice = req.get("voice")
+        if voice and o.get("engine") != "seedvc":
+            m, ix = V.model_files(voice)
+            item.update(model=str(m), index=str(ix or ""))
+        out = req.get("output") or str(Path(req["take"]).with_name(Path(req["take"]).stem + " - по тексту.wav"))
+        r = AF.fix(ctx, req["input"], req["take"], item, req["lyrics"], out, voice=voice,
+                   language=req.get("language") or "auto", engine_take=o.get("engine") or "rvc")
+        files = [{"role": "dzod_lead", "path": r["file"]}] if r.get("file") else []
+        return {"ok": True, "files": files, "words": r.get("words", []), "fixed": r.get("fixed", 0),
+                "left": r.get("left", 0), "seconds": r.get("seconds")}
     if action == "sing":
         # DZOD Executor (E1): {"midi": "...mid", "voice": "<код голоса>", "convert": {...}, "output_dir": "..."}
         import executor as X

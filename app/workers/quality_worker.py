@@ -315,15 +315,58 @@ def run(job):
         "brightness_worst": worst, "brightness_words": bright,
         "bursts": art["bursts"], "clicks": art["clicks"], "metal_ratio": art["metal_ratio"],
         "asr_source": a_src["text"], "asr_take": a_take["text"],
+        "ref_words": [{"w": r["w"], "t0": None if r["t0"] is None else round(r["t0"], 3),
+                       "t1": None if r["t1"] is None else round(r["t1"], 3)} for r in ref],
+        "lyrics_used": bool(lyrics),
     }
     json.dump(res, open(job["out_json"], "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     say("P", "1.00 Готово.")
     return {"out_json": job["out_json"], "passed": res["passed"], "checks": checks, "problems": len(own)}
 
 
+def run_score(job):
+    """0.8.2: оценка вариантов места по распознаванию. items: [{"wav", "t0", "t1", "expect": [слова], "target": слово}]
+    → для каждого: что распознано в отрезке, WER против ожидаемых слов, найдено ли нужное слово."""
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from math import gcd
+    from scipy.signal import resample_poly
+    from transformers import pipeline
+    dev = job.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu")
+    dt = torch.float16 if dev.startswith("cuda") else torch.float32
+    pipe = pipeline("automatic-speech-recognition", model=job["whisper"], torch_dtype=dt, device=dev)
+    lang = job.get("language")
+    kw = {"task": "transcribe"}
+    if lang in ("en", "ru"):
+        kw["language"] = "english" if lang == "en" else "russian"
+    cache, out = {}, []
+    items = job.get("items") or []
+    for k, it in enumerate(items):
+        if k % 5 == 0:
+            say("P", f"{0.05 + 0.9 * k / max(1, len(items)):.3f} Оценка вариантов: {k + 1} из {len(items)}…")
+        if it["wav"] not in cache:
+            y, sr = sf.read(it["wav"], dtype="float64", always_2d=True)
+            cache.clear()
+            cache[it["wav"]] = (y.mean(1), sr)
+        y, sr = cache[it["wav"]]
+        seg = y[max(0, int(it["t0"] * sr)):int(it["t1"] * sr)]
+        g = gcd(int(sr), 16000)
+        x16 = resample_poly(seg, 16000 // g, int(sr) // g).astype(np.float32)
+        txt = pipe(x16, generate_kwargs=kw).get("text", "") if len(x16) > 1600 else ""
+        hyp = norm_words(txt)
+        exp = [w for w in it.get("expect") or []]
+        out.append({"text": txt.strip(), "wer": wer(exp, hyp) if exp else None,
+                    "has_target": (it.get("target") or "") in hyp})
+    return {"items": out}
+
+
 def main():
     try:
         job = json.load(open(sys.argv[1], encoding="utf-8"))
+        if job.get("mode") == "score":
+            say("R", json.dumps(run_score(job), ensure_ascii=False))
+            return
         say("R", json.dumps(run(job), ensure_ascii=False))
     except Exception as ex:  # noqa: BLE001
         traceback.print_exc()
