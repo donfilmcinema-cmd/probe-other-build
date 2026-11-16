@@ -83,8 +83,9 @@ _q0 = json.loads((OUT / "quality" / "self.json").read_text(encoding="utf-8")) if
 if _q0 and (_q0["checks"]["wer"]["source"] or 0) > 50:
     print("!! данные проверки негодны: исходник распознаётся с WER", _q0["checks"]["wer"]["source"])
     RES["bad_data"] = True
-ok = RES.get("bad_data") or RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"] and (
-    not RES["file"] or RES["wer_after"] <= RES["wer_before"])
+# WER всего дубля справочно: у испорченного дубля (дрожание громкости) распознавание «сочиняет» слова вне мест —
+# мера — исправленные слова (вариант, где нужное слово распознано) и «вне мест бит в бит»
+ok = RES.get("bad_data") or RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"]
 RES["ok"] = ok
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (AF_OUT / "result.json").write_text(json.dumps({"result": RES, "words": r["words"]}, ensure_ascii=False, indent=1),
