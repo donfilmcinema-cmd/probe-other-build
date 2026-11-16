@@ -731,7 +731,7 @@ function showAutofix(song, r) {
   const ws = a.words || [];
   const tm = v => v == null ? '?' : v.toFixed(1) + ' с';
   const rows = ws.map(w => `<tr><td>${tm(w.t0)}</td><td><b>${esc(w.word)}</b></td><td class="${w.fixed ? 'q-ok' : 'q-bad'}">${w.fixed ? '✓ ' + esc(w.method) : (w.chosen === 'take' ? '✗ не вышло — оставлено как было' : '≈ ' + esc(w.method))}</td><td class="v7-note">было: «${esc(w.before)}»${w.chosen !== 'take' ? '<br>стало: «' + esc(w.after) + '»' : ''}</td></tr>`).join('');
-  const head = a.note ? esc(a.note) : `Слов с ошибкой: ${ws.length} · исправлено: ${a.fixed || 0} · осталось: ${a.left || 0}` + (a.file ? ' · новый дубль готов, прежний не тронут' : ' · новый дубль не нужен — ни один вариант не оказался лучше');
+  const head = a.note ? esc(a.note) : `Слов с ошибкой: ${ws.length} · исправлено: ${a.fixed || 0} · осталось: ${a.left || 0}${a.passes > 1 ? ' · проходов: ' + a.passes : ''}` + (a.file ? ' · новый дубль готов, прежний не тронут' : ' · новый дубль не нужен — ни один вариант не оказался лучше');
   modal({ title: 'Исправление по тексту песни', cancel: false, ok: 'Закрыть',
     html: `<div class="q-rep"><div class="q-head ${(a.left || 0) === 0 ? 'ok' : 'bad'}">${head}</div>${rows ? `<table class="q-t">${rows}</table>` : ''}
     <p class="v7-note">Способы: «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — место перепето Seed-VC. Выбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста. Оставшиеся слова — послушайте и при необходимости поправьте пометкой в «Тексте».</p></div>` });

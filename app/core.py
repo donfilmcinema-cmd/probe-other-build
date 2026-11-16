@@ -175,7 +175,7 @@ def process(ctx, req):
             m, ix = V.model_files(voice)
             item.update(model=str(m), index=str(ix or ""))
         out = req.get("output") or str(Path(req["take"]).with_name(Path(req["take"]).stem + " - по тексту.wav"))
-        r = AF.fix(ctx, req["input"], req["take"], item, req["lyrics"], out, voice=voice,
+        r = AF.fix_passes(ctx, req["input"], req["take"], item, req["lyrics"], out, voice=voice,
                    language=req.get("language") or "auto", engine_take=o.get("engine") or "rvc")
         files = [{"role": "dzod_lead", "path": r["file"]}] if r.get("file") else []
         return {"ok": True, "files": files, "words": r.get("words", []), "fixed": r.get("fixed", 0),

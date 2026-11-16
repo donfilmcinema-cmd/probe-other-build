@@ -532,7 +532,7 @@ def text_autofix(ctx, song_id, take_id, lyrics=None):
     try:
         inp = tmp / "src.wav"
         A.to_wav(src, inp, mono=True)
-        r = AF.fix(ctx, inp, s.dir / t["file"], item, lyr, s.dir / fname, voice=t["voice"], report=rep,
+        r = AF.fix_passes(ctx, inp, s.dir / t["file"], item, lyr, s.dir / fname, voice=t["voice"], report=rep,
                    engine_take=eng)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

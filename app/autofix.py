@@ -27,7 +27,7 @@ import engine as E
 CTX = 0.6          # с: контекст перепевки вокруг слова
 PAD = 0.05         # с: вклеивается слово ± это
 CLIP = 1.0         # с: отрезок распознавания вокруг слова
-MAX_WORDS = 40
+MAX_WORDS = 200    # 0.8.9: было 40 — на Suno-песне ошибок ~150
 METHODS = {"consonants": "согласные исходника", "lowidx": "меньше тембра", "seedvc": "Seed-VC", "rvc": "RVC"}
 
 
@@ -263,5 +263,46 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
         return {"before": report["checks"]["wer"], "words": words, "changed": changed,
                 "file": str(out) if final and out.exists() else None, "fixed": n_fixed, "left": len(problems) - n_fixed,
                 "methods": methods, "seconds": round(time.time() - t_all, 1)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
+               passes=3):
+    """0.8.9: «проходить, пока исправляется» — до 3 проходов. Каждый следующий заново сверяет уже исправленный
+    дубль с текстом и берётся за оставшиеся слова; останов, когда за проход ничего не исправилось."""
+    out = Path(out)
+    cur, rep, allw, total_fixed, first, res, chg = Path(take), report, [], 0, None, None, []
+    tmp = E.new_tmp("afp")
+    try:
+        for k in range(passes):
+            ctx.span(k / passes, (k + 1) / passes, f"Проход {k + 1} из {passes}…")
+            dst = tmp / f"pass{k + 1}.wav"
+            r = fix(ctx, source, cur, item, lyrics, dst, voice=voice, report=rep, language=language,
+                    engine_take=engine_take)
+            if first is None:
+                first = r
+            for w in r.get("words", []):
+                w["pass"] = k + 1
+            allw += r.get("words", [])
+            chg += [list(c) for c in (r.get("changed") or [])]
+            total_fixed += r.get("fixed", 0) or 0
+            res = r
+            if not r.get("file") or not r.get("fixed"):
+                break
+            cur, rep = Path(r["file"]), None
+        if cur != Path(take):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(cur, out)
+        # последнее слово о каждом месте — из последнего прохода, где оно было
+        last = {}
+        for w in allw:
+            last[(w["word"], round(w["t0"], 1))] = w
+        words = sorted(last.values(), key=lambda w: w["t0"])
+        changed = sorted({tuple(c) for c in chg})
+        return {"before": first["before"] if first else None, "words": words, "changed": [list(c) for c in changed],
+                "file": str(out) if cur != Path(take) else None, "fixed": sum(1 for w in words if w.get("fixed")),
+                "left": sum(1 for w in words if not w.get("fixed")), "passes": k + 1,
+                "methods": (res or {}).get("methods"), "note": (first or {}).get("note")}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

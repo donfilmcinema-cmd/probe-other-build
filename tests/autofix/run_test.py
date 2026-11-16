@@ -58,7 +58,7 @@ ctx = E.Ctx()
 src, take = OUT / "clean.wav", OUT / "quality" / "take_bad.wav"
 item = {"model": str(W / "test_voice.pth"), "index": "", "pitch": 0, "index_rate": 0.0, "protect": 0.33,
         "f0_method": "rmvpe"}
-r = AF.fix(ctx, src, take, item, LYR, AF_OUT / "fixed.wav", voice=None, language="en")
+r = AF.fix_passes(ctx, src, take, item, LYR, AF_OUT / "fixed.wav", voice=None, language="en")
 print(json.dumps({k: v for k, v in r.items() if k != "words"}, ensure_ascii=False))
 for w in r["words"]:
     print(f"   {w['word']:>10} {w['t0']}–{w['t1']} {w['kind']}: {w['method']}{' ✓' if w['fixed'] else ''} | было «{w['before']}» → «{w['after']}»"
