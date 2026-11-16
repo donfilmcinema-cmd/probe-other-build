@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "0.8.9"
+VERSION = "0.9.0"
 IS_WIN = sys.platform == "win32"
 _HERE0 = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -65,7 +65,7 @@ EXEC_PACKAGES = ["torch==2.2.0", "torchaudio==2.2.0", "numpy<2.0.0", "transforme
 # Seed-VC (0.8.1) — второй движок перепевки: содержание по Whisper, тембр по образцу голоса (GPLv3)
 SEEDVC_COMMIT = "51383efd921027683c89e5348211d93ff12ac2a8"
 SEEDVC_ZIP = f"https://github.com/Plachtaa/seed-vc/archive/{SEEDVC_COMMIT}.zip"
-SEEDVC_PACKAGES = ["munch==4.0.0", "einops==0.8.0", "pyyaml", "matplotlib", "numpy<2.0.0"]
+SEEDVC_PACKAGES = ["munch==4.0.0", "einops==0.8.0", "pyyaml==6.0.2"]   # 0.9.0: колёса — в установщике, matplotlib не нужен
 NO_WINDOW = 0x08000000 if IS_WIN else 0
 
 HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -378,6 +378,8 @@ def child_env(extra=None):
         "UV_PYTHON_INSTALL_DIR": str(paths().python_dir),
         "UV_LINK_MODE": "hardlink",
         "UV_NO_PROGRESS": "1",
+        "UV_HTTP_TIMEOUT": "300",          # 0.9.0: медленный VPN — ждать дольше
+        "UV_CONCURRENT_DOWNLOADS": "2",
         "TQDM_MININTERVAL": "1",
         "PYTHONWARNINGS": "ignore",
     })
@@ -533,9 +535,9 @@ def friendly(msg, tail):
         return "Закончилось место на диске. Освободите место и попробуйте снова."
     if "urlopen error" in text or "connection" in text and "error" in text or "max retries" in text:
         return "Нет связи с сервером загрузки. Проверьте интернет и попробуйте снова."
-    last = [t for t in (tail or []) if t.strip()][-3:]
+    last = [t for t in (tail or []) if t.strip()][-6:]
     extra = ("\nПоследние строки журнала:\n" + "\n".join(last)) if last else ""
-    return msg + extra
+    return msg + extra + f"\nПолный журнал: {log_path()}"
 
 
 def kill_tree(proc):
@@ -908,7 +910,15 @@ def install_seedvc(ctx):
         shutil.move(str(top), str(src))
         shutil.rmtree(tmp, ignore_errors=True)
     ctx.span(0.1, 0.2, "Seed-VC: библиотеки…")
-    _uv(ctx, ["pip", "install", "-p", p.exec_py, *SEEDVC_PACKAGES], "Установка Seed-VC")
+    # 0.9.0: без сети — колёса едут в установщике (у автора files.pythonhosted.org не отвечает)
+    links = [d for d in (WORKERS_SRC / "seedvc_wheels", p.engine / "wheels-seedvc") if d.is_dir()]
+    if links:
+        args = ["pip", "install", "-p", p.exec_py, "--no-index"]
+        for d in links:
+            args += ["--find-links", str(d)]
+        _uv(ctx, [*args, *SEEDVC_PACKAGES], "Установка Seed-VC")
+    else:
+        _uv(ctx, ["pip", "install", "-p", p.exec_py, *SEEDVC_PACKAGES], "Установка Seed-VC")
     ctx.span(0.2, 1.0, "Seed-VC: модели (~1,5 ГБ)…")
     workers = ensure_workers()
     job = p.engine / "tmp" / "seedvc_warmup.json"

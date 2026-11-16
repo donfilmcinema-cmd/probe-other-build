@@ -46,6 +46,22 @@ def _stub_dac():
     sys.modules.update({"dac": dac, "dac.nn": nn, "dac.nn.quantize": q})
 
 
+def _stub_matplotlib():
+    """BigVGAN (utils.py) импортирует matplotlib ради рисования спектрограмм — для перепевки не нужен.
+    Нет пакета — заглушка (у автора matplotlib не скачивался)."""
+    try:
+        import matplotlib  # noqa: F401
+        return
+    except ImportError:
+        pass
+    mpl = types.ModuleType("matplotlib")
+    mpl.use = lambda *a, **k: None
+    pylab = types.ModuleType("matplotlib.pylab")
+    pyplot = types.ModuleType("matplotlib.pyplot")
+    mpl.pylab, mpl.pyplot = pylab, pyplot
+    sys.modules.update({"matplotlib": mpl, "matplotlib.pylab": pylab, "matplotlib.pyplot": pyplot})
+
+
 def load(src_dir, device, fp16):
     import torch
     import yaml
@@ -53,6 +69,7 @@ def load(src_dir, device, fp16):
     sys.path.insert(0, src_dir)
     os.environ.setdefault("HF_HUB_CACHE", os.path.join(src_dir, "checkpoints", "hf_cache"))
     _stub_dac()
+    _stub_matplotlib()
     from hf_utils import load_custom_model_from_hf
     from modules.commons import build_model, load_checkpoint, recursive_munch
     from modules.rmvpe import RMVPE

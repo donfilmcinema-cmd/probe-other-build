@@ -303,6 +303,8 @@ def run(log=print):
         check("по тексту: глухие кадры (шум) — 1, голос — 0",
               _m[:int(.3 * _sr)].mean() < 0.05 and _m[int(.43 * _sr):int(.52 * _sr)].mean() > 0.9)
         check("по тексту: запрос autofix", "autofix" in C.ACTIONS)
+        check("Seed-VC: колёса пакетов едут в программе (без PyPI)",
+              len(list((E.WORKERS_SRC / "seedvc_wheels").glob("*.whl"))) == 3)
         check("Seed-VC: код едет в программе (без GitHub)",
               (E.WORKERS_SRC / "seedvc_src" / "modules" / "commons.py").exists()
               and (E.WORKERS_SRC / "seedvc_src" / "configs" / "presets" / "config_dit_mel_seed_uvit_whisper_base_f0_44k.yml").exists())
