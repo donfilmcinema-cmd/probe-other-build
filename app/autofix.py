@@ -251,10 +251,10 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
                               "spans": [[round(max(0.0, pr["t0"] - PAD), 3), round(min(total, pr["t1"] + PAD), 3)]]})
         changed = []
         if final:
-            (tmp / "final.json").write_text(json.dumps(final), encoding="utf-8")
+            (tmp / "final_regs.json").write_text(json.dumps(final), encoding="utf-8")
             out.parent.mkdir(parents=True, exist_ok=True)
             rr = ctx.run([p.exec_py, workers / "textfix_worker.py",
-                          _job(tmp, "final", {"step": "splice", "take": str(take), "regions": str(tmp / "final.json"),
+                          _job(tmp, "final", {"step": "splice", "take": str(take), "regions": str(tmp / "final_regs.json"),
                                               "out": str(out)})], env=E.exec_env(), what="Новый дубль") or {}
             changed = rr.get("changed") or []
         n_fixed = sum(1 for w in words if w["fixed"])
