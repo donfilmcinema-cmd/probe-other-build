@@ -331,10 +331,11 @@ def run(job):
     checks = {
         "wer": {"take": wer_take, "source": wer_src, "against": "текст автора" if lyrics else "распознанный исходник",
                 "covered": cover, "words": len(rw),
-                # WER > 50 % и у исходника — ошибка самой сверки (не тот текст, не тот язык), а не «всё хорошо»
-                "suspect": wer_take is not None and max(wer_take, wer_src or 0) > TARGET["wer_sane"],
+                # WER исходника > 50 % против текста — ошибка самой сверки (не тот текст, не тот язык); высокий WER
+                # одного дубля — настоящий результат (дубль неразборчив), не «сверка не удалась»
+                "suspect": bool(lyrics) and (wer_src or 0) > TARGET["wer_sane"],
                 "ok": wer_take is not None and wer_take <= (wer_src or 0.0) + TARGET["wer_pp"] + (0 if lyrics else 3.0)
-                and max(wer_take, wer_src or 0) <= TARGET["wer_sane"]},
+                and (wer_src or 0) <= TARGET["wer_sane"]},
         "brightness": {"median_ratio": b_med, "too_bright": b_med is not None and b_med > TARGET["bright_max"],
                        "ok": b_med is not None and TARGET["bright"] <= b_med <= TARGET["bright_max"]},
         "dynamics": {**(env or {}), "ok": env is not None and env["median_db"] <= TARGET["env_db"]},
