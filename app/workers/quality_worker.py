@@ -269,11 +269,23 @@ def run(job):
 
     # 0.8.3: текст автора может покрывать только часть песни (T022: 4 строки из 8) — сверяем только участок,
     # покрытый текстом по выравниванию (±1 с); распознанное вне участка — «текста нет», в ошибки не идёт
+    # Участок — по распознанному исходнику: где в нём нашлись слова текста (выравнивание текста по звуку
+    # растягивает короткий текст на всю песню). Время слов текста, найденных в исходнике, — тоже оттуда.
     cover = None
     if lyrics:
-        tt = [r["t0"] for r in ref if r["t0"] is not None] + [r["t1"] for r in ref if r["t1"] is not None]
-        if tt:
-            cover = [max(0.0, min(tt) - 1.0), min(n / sr, max(tt) + 1.0)]
+        sw = a_src["words"]
+        hit = [(i, j) for op, i, j in edit_ops(rw, [w["w"] for w in sw]) if op == "ok" and sw[j]["t0"] is not None]
+        if len(hit) >= max(2, len(rw) // 4):
+            for i, j in hit:
+                if sw[j]["t1"] is not None:
+                    ref[i]["t0"], ref[i]["t1"] = sw[j]["t0"], sw[j]["t1"]
+            t_a = sw[hit[0][1]]["t0"]
+            t_b = sw[hit[-1][1]]["t1"] or sw[hit[-1][1]]["t0"]
+        else:
+            tt = [r["t0"] for r in ref if r["t0"] is not None] + [r["t1"] for r in ref if r["t1"] is not None]
+            t_a, t_b = (min(tt), max(tt)) if tt else (None, None)
+        if t_a is not None:
+            cover = [max(0.0, t_a - 1.0), min(n / sr, t_b + 1.0)]
 
             def inside(ws):
                 return [w["w"] for w in ws if w["t0"] is None or (cover[0] <= w["t0"] <= cover[1])]
