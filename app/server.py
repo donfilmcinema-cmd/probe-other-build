@@ -327,7 +327,8 @@ class App:
         if name == "text_autofix":
             # 0.8.2: сверить дубль с текстом и переделать разошедшиеся слова
             return self.start_job("autofix", "Исправление по тексту песни",
-                                  lambda ctx: S.text_autofix(ctx, b["id"], b["take"], b.get("lyrics")))
+                                  lambda ctx: S.text_autofix(ctx, b["id"], b["take"], b.get("lyrics"),
+                                                             b.get("seedvc", False)))
         if name == "take_quality_report":
             return {"report": S.take_quality_report(b["id"], b["take"])}
         if name == "song_clear":

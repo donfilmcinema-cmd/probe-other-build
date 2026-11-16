@@ -494,7 +494,7 @@ def take_quality_report(song_id, take_id):
     return json.loads(f.read_text(encoding="utf-8"))
 
 
-def text_autofix(ctx, song_id, take_id, lyrics=None):
+def text_autofix(ctx, song_id, take_id, lyrics=None, use_seedvc=False):
     """0.8.2: сверить дубль с текстом песни и переделать слова, которые разошлись. Новый дубль «… - по тексту NN»."""
     import autofix as AF
     import quality as Q
@@ -533,6 +533,7 @@ def text_autofix(ctx, song_id, take_id, lyrics=None):
         inp = tmp / "src.wav"
         A.to_wav(src, inp, mono=True)
         r = AF.fix_passes(ctx, inp, s.dir / t["file"], item, lyr, s.dir / fname, voice=t["voice"], report=rep,
+                          use_seedvc=bool(use_seedvc),
                    engine_take=eng)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

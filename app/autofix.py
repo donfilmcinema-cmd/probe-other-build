@@ -113,7 +113,8 @@ def _consonant_region(take, src, sr, a, b, spans, out):
     A.write(out, z, sr, "FLOAT")
 
 
-def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc"):
+def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
+        use_seedvc=False):
     """source — исходник дубля, take — дубль, item — настройки той перепевки RVC (model, index, …), voice — код голоса
     (для образца Seed-VC). Пишет out; возвращает отчёт по словам."""
     import quality as Q
@@ -156,7 +157,8 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
                 methods.append("rvc")
         else:
             methods.append("lowidx")
-        svc_ok = engine_take != "seedvc" and E.seedvc_ready() and voice is not None
+        # 17.11 (вердикт автора на слух: Seed-VC «ненастоящий, повреждённый») — только по явной галочке
+        svc_ok = use_seedvc and engine_take != "seedvc" and E.seedvc_ready() and voice is not None
         if svc_ok:
             methods.append("seedvc")
         ctx.span(0.35, 0.65, "Варианты мест…")
@@ -268,7 +270,7 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
 
 
 def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
-               passes=3):
+               passes=3, use_seedvc=False):
     """0.8.9: «проходить, пока исправляется» — до 3 проходов. Каждый следующий заново сверяет уже исправленный
     дубль с текстом и берётся за оставшиеся слова; останов, когда за проход ничего не исправилось."""
     out = Path(out)
@@ -279,7 +281,7 @@ def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, la
             ctx.span(k / passes, (k + 1) / passes, f"Проход {k + 1} из {passes}…")
             dst = tmp / f"pass{k + 1}.wav"
             r = fix(ctx, source, cur, item, lyrics, dst, voice=voice, report=rep, language=language,
-                    engine_take=engine_take)
+                    engine_take=engine_take, use_seedvc=use_seedvc)
             if first is None:
                 first = r
             for w in r.get("words", []):

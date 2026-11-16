@@ -657,6 +657,10 @@ function renderTakes() {
   }
 }
 /* ---------- КАЧЕСТВО (0.8.0): мерило дубля ---------- */
+{
+  const cb2 = document.getElementById('v-afsvc');
+  if (cb2) { try { cb2.checked = localStorage.getItem('dzod.autofixSeedvc') === '1'; } catch (e) { /* */ } cb2.onchange = () => { try { localStorage.setItem('dzod.autofixSeedvc', cb2.checked ? '1' : '0'); } catch (e) { /* */ } }; }
+}
 function autoQuality() { try { return localStorage.getItem('dzod.autoQuality') !== '0'; } catch (e) { return true; } }
 {
   const cb = document.getElementById('v-autoq');
@@ -723,7 +727,8 @@ async function showQuality(s, t, rep) {
   if (await pending && canFix) runAutofix(s, t);
 }
 async function runAutofix(s, t) {
-  const r = await safe(() => api('text_autofix', { id: s.id, take: t.id }));
+  let svc = false; try { svc = localStorage.getItem('dzod.autofixSeedvc') === '1'; } catch (e) { /* нет хранилища */ }
+  const r = await safe(() => api('text_autofix', { id: s.id, take: t.id, seedvc: svc }));
   if (r) { S.jobSeen = 0; pollJob(true); }
 }
 function showAutofix(song, r) {
@@ -734,7 +739,7 @@ function showAutofix(song, r) {
   const head = a.note ? esc(a.note) : `Слов с ошибкой: ${ws.length} · исправлено: ${a.fixed || 0} · осталось: ${a.left || 0}${a.passes > 1 ? ' · проходов: ' + a.passes : ''}` + (a.file ? ' · новый дубль готов, прежний не тронут' : ' · новый дубль не нужен — ни один вариант не оказался лучше');
   modal({ title: 'Исправление по тексту песни', cancel: false, ok: 'Закрыть',
     html: `<div class="q-rep"><div class="q-head ${(a.left || 0) === 0 ? 'ok' : 'bad'}">${head}</div>${rows ? `<table class="q-t">${rows}</table>` : ''}
-    <p class="v7-note">Способы: «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — место перепето Seed-VC. Выбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста. Оставшиеся слова — послушайте и при необходимости поправьте пометкой в «Тексте».</p></div>` });
+    <p class="v7-note">Способы: «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — место перепето Seed-VC (только если включено в «Перепевка — подробно»). Выбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста. Оставшиеся слова — послушайте и при необходимости поправьте пометкой в «Тексте».</p></div>` });
 }
 /* Сравнение дублей (0.8.1): таблица цифр «Качества» по всем дублям песни — RVC против Seed-VC */
 $('takes-table').onclick = () => {
