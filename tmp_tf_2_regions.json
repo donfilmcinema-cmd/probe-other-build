@@ -1,0 +1,22 @@
+[
+ {
+  "a": 0.0,
+  "b": 2.341,
+  "spans": [
+   [
+    0.621,
+    1.341
+   ]
+  ],
+  "src": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_2/reg/r00_src.wav",
+  "hint": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_2/reg/r00_hint.wav",
+  "content": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_2/reg/r00_content.wav",
+  "out": "/home/runner/work/probe-other-build/probe-other-build/w/out/tmp_tf_2/reg/r00_out.wav",
+  "f0_spans": [
+   [
+    0.601,
+    1.361
+   ]
+  ]
+ }
+]

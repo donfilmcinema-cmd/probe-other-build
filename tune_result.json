@@ -1,0 +1,28 @@
+{
+ "window": [
+  0.0,
+  11.59
+ ],
+ "words": 11,
+ "wer_source": 9.1,
+ "wer_raw": 9.1,
+ "rows": 18,
+ "with_wer": 18,
+ "files": 18,
+ "best": {
+  "epoch": 250,
+  "epoch_file": "test_250e_2500s.pth",
+  "epoch_label": "эпоха 250",
+  "index_rate": 0.6,
+  "protect": 0.2,
+  "wer": 9.1,
+  "heard": "I wish you were here tonight We are the beautiful no-mo",
+  "bright": null,
+  "env_db": 2.02,
+  "in_norm": false,
+  "file": "/home/runner/work/probe-other-build/probe-other-build/w/out/tune/подбор/12 эпоха 250 · тембр 60 · защита 0.20.wav"
+ },
+ "json": true,
+ "seconds": 241.8,
+ "ok": true
+}

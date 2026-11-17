@@ -1,0 +1,260 @@
+{
+ "result": {
+  "problems": 5,
+  "fixed": 1,
+  "file": true,
+  "methods": [
+   "executor",
+   "executor_head",
+   "executor_crisp",
+   "consonants",
+   "lowidx"
+  ],
+  "by_executor": 0,
+  "executor_tried": 5,
+  "variants": [
+   "Executor-RVC.wav",
+   "Executor-RVC по слогу.wav",
+   "Executor-RVC чётче согласные.wav",
+   "согласные исходника.wav",
+   "меньше тембра.wav"
+  ],
+  "outside_identical": true,
+  "wer_before": 63.6,
+  "wer_after": 27.3,
+  "asr_after": "I wish you a good night We are the beautiful no more",
+  "ok": true
+ },
+ "words": [
+  {
+   "word": "i",
+   "t0": 0.0,
+   "t1": 0.44,
+   "kind": "искажено",
+   "heard": "hope",
+   "chosen": "executor_head",
+   "method": "Executor → RVC, по слогу",
+   "fixed": true,
+   "contested": true,
+   "before": "I",
+   "after": "I",
+   "tried": {
+    "take": {
+     "text": "I",
+     "wer": 50.0,
+     "ok": true
+    },
+    "executor": {
+     "text": "to re-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e-e",
+     "wer": 11150.0,
+     "ok": false
+    },
+    "executor_head": {
+     "text": "I",
+     "wer": 50.0,
+     "ok": true
+    },
+    "executor_crisp": {
+     "text": "I",
+     "wer": 50.0,
+     "ok": true
+    },
+    "consonants": {
+     "text": "Oh",
+     "wer": 100.0,
+     "ok": false
+    },
+    "lowidx": {
+     "text": "Always",
+     "wer": 100.0,
+     "ok": false
+    }
+   },
+   "pass": 3
+  },
+  {
+   "word": "wish",
+   "t0": 0.44,
+   "t1": 0.96,
+   "kind": "искажено",
+   "heard": "as",
+   "chosen": "lowidx",
+   "method": "меньше тембра",
+   "fixed": false,
+   "contested": false,
+   "before": "Oh, my God.",
+   "after": "Always you are",
+   "tried": {
+    "take": {
+     "text": "Oh, my God.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor": {
+     "text": "I'm gonna go to the beach.",
+     "wer": 150.0,
+     "ok": false
+    },
+    "executor_head": {
+     "text": "I'm so sorry.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_crisp": {
+     "text": "Oh my god.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "consonants": {
+     "text": "Oh, I'm so sorry.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "lowidx": {
+     "text": "Always you are",
+     "wer": 75.0,
+     "ok": false
+    }
+   },
+   "pass": 3
+  },
+  {
+   "word": "were",
+   "t0": 1.64,
+   "t1": 1.94,
+   "kind": "искажено",
+   "heard": "in",
+   "chosen": "take",
+   "method": "без изменений",
+   "fixed": false,
+   "contested": false,
+   "before": "I feel like...",
+   "after": "I feel like...",
+   "tried": {
+    "take": {
+     "text": "I feel like...",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor": {
+     "text": "Is you lie",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_head": {
+     "text": "Is he alive?",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_crisp": {
+     "text": "Is you lie",
+     "wer": 100.0,
+     "ok": false
+    },
+    "consonants": {
+     "text": "I feel like...",
+     "wer": 100.0,
+     "ok": false
+    },
+    "lowidx": {
+     "text": "Where's you are you?",
+     "wer": 100.0,
+     "ok": false
+    }
+   },
+   "pass": 3
+  },
+  {
+   "word": "here",
+   "t0": 1.94,
+   "t1": 2.54,
+   "kind": "искажено",
+   "heard": "the",
+   "chosen": "take",
+   "method": "без изменений",
+   "fixed": false,
+   "contested": false,
+   "before": "I feel like...",
+   "after": "I feel like...",
+   "tried": {
+    "take": {
+     "text": "I feel like...",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor": {
+     "text": "Is you lie",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_head": {
+     "text": "I'm so sorry.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_crisp": {
+     "text": "Is you lie",
+     "wer": 100.0,
+     "ok": false
+    },
+    "consonants": {
+     "text": "I feel like...",
+     "wer": 100.0,
+     "ok": false
+    },
+    "lowidx": {
+     "text": "I'm so sorry.",
+     "wer": 100.0,
+     "ok": false
+    }
+   },
+   "pass": 3
+  },
+  {
+   "word": "tonight",
+   "t0": 2.54,
+   "t1": 3.96,
+   "kind": "искажено",
+   "heard": "night",
+   "chosen": "take",
+   "method": "без изменений",
+   "fixed": false,
+   "contested": false,
+   "before": "Bye!",
+   "after": "Bye!",
+   "tried": {
+    "take": {
+     "text": "Bye!",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor": {
+     "text": "Liiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_head": {
+     "text": "I love you.",
+     "wer": 100.0,
+     "ok": false
+    },
+    "executor_crisp": {
+     "text": "I'm so tired",
+     "wer": 100.0,
+     "ok": false
+    },
+    "consonants": {
+     "text": "Bye!",
+     "wer": 100.0,
+     "ok": false
+    },
+    "lowidx": {
+     "text": "You're so cute, aren't I?",
+     "wer": 166.7,
+     "ok": false
+    }
+   },
+   "pass": 3
+  }
+ ]
+}

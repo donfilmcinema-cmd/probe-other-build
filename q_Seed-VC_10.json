@@ -1,0 +1,347 @@
+{
+ "version": null,
+ "source": "/home/runner/work/probe-other-build/probe-other-build/w/out/clean.wav",
+ "take": "/home/runner/work/probe-other-build/probe-other-build/w/out/bench/seedvc_10.wav",
+ "language": "en",
+ "seconds": 11.59,
+ "time_s": 11.3,
+ "target": {
+  "wer_pp": 2.0,
+  "bright": 0.8,
+  "bright_max": 1.5,
+  "env_db": 1.5,
+  "clicks": 0,
+  "wer_sane": 50.0
+ },
+ "checks": {
+  "wer": {
+   "take": 54.5,
+   "source": 9.1,
+   "against": "текст автора",
+   "covered": [
+    0.0,
+    9.18
+   ],
+   "words": 11,
+   "suspect": false,
+   "ok": false
+  },
+  "brightness": {
+   "median_ratio": 0.51,
+   "too_bright": false,
+   "ok": false
+  },
+  "dynamics": {
+   "median_db": 1.42,
+   "p90_db": 4.42,
+   "frames": 942,
+   "ok": true
+  },
+  "clicks": {
+   "count": 1,
+   "ok": false
+  }
+ },
+ "passed": false,
+ "problems": [
+  {
+   "word": "i",
+   "t0": 0.0,
+   "t1": 0.44,
+   "kind": "искажено",
+   "heard": "for",
+   "ca": 0,
+   "cb": 1,
+   "also_in_source": false
+  },
+  {
+   "word": "wish",
+   "t0": 0.44,
+   "t1": 0.96,
+   "kind": "искажено",
+   "heard": "when",
+   "ca": 2,
+   "cb": 6,
+   "also_in_source": false
+  },
+  {
+   "word": "were",
+   "t0": 1.64,
+   "t1": 1.94,
+   "kind": "искажено",
+   "heard": "are",
+   "ca": 11,
+   "cb": 15,
+   "also_in_source": false
+  },
+  {
+   "word": "beautiful",
+   "t0": 7.38,
+   "t1": 8.18,
+   "kind": "искажено",
+   "heard": "of",
+   "ca": 40,
+   "cb": 49,
+   "also_in_source": false
+  }
+ ],
+ "problems_also_in_source": [
+  {
+   "word": "no",
+   "t0": 9.39,
+   "t1": 9.53,
+   "kind": "искажено",
+   "heard": "love",
+   "ca": 50,
+   "cb": 52,
+   "also_in_source": true
+  }
+ ],
+ "brightness_worst": [
+  {
+   "word": "we",
+   "t0": 3.96,
+   "t1": 6.6,
+   "src_hf2k": 0.051,
+   "take_hf2k": 0.025,
+   "src_hf4k": 0.005,
+   "take_hf4k": 0.008,
+   "ratio": 0.48
+  },
+  {
+   "word": "here",
+   "t0": 1.94,
+   "t1": 2.54,
+   "src_hf2k": 0.072,
+   "take_hf2k": 0.039,
+   "src_hf4k": 0.006,
+   "take_hf4k": 0.005,
+   "ratio": 0.54
+  }
+ ],
+ "brightness_brightest": [
+  {
+   "word": "here",
+   "t0": 1.94,
+   "t1": 2.54,
+   "src_hf2k": 0.072,
+   "take_hf2k": 0.039,
+   "src_hf4k": 0.006,
+   "take_hf4k": 0.005,
+   "ratio": 0.54
+  },
+  {
+   "word": "we",
+   "t0": 3.96,
+   "t1": 6.6,
+   "src_hf2k": 0.051,
+   "take_hf2k": 0.025,
+   "src_hf4k": 0.005,
+   "take_hf4k": 0.008,
+   "ratio": 0.48
+  }
+ ],
+ "brightness_words": [
+  {
+   "word": "i",
+   "t0": 0.0,
+   "t1": 0.44,
+   "src_hf2k": 0.002,
+   "take_hf2k": 0.004,
+   "src_hf4k": 0.001,
+   "take_hf4k": 0.001,
+   "ratio": null
+  },
+  {
+   "word": "wish",
+   "t0": 0.44,
+   "t1": 0.96,
+   "src_hf2k": 0.008,
+   "take_hf2k": 0.006,
+   "src_hf4k": 0.001,
+   "take_hf4k": 0.004,
+   "ratio": null
+  },
+  {
+   "word": "you",
+   "t0": 0.96,
+   "t1": 1.64,
+   "src_hf2k": 0.039,
+   "take_hf2k": 0.014,
+   "src_hf4k": 0.004,
+   "take_hf4k": 0.007,
+   "ratio": null
+  },
+  {
+   "word": "were",
+   "t0": 1.64,
+   "t1": 1.94,
+   "src_hf2k": 0.01,
+   "take_hf2k": 0.004,
+   "src_hf4k": 0.003,
+   "take_hf4k": 0.002,
+   "ratio": null
+  },
+  {
+   "word": "here",
+   "t0": 1.94,
+   "t1": 2.54,
+   "src_hf2k": 0.072,
+   "take_hf2k": 0.039,
+   "src_hf4k": 0.006,
+   "take_hf4k": 0.005,
+   "ratio": 0.54
+  },
+  {
+   "word": "tonight",
+   "t0": 2.54,
+   "t1": 3.96,
+   "src_hf2k": 0.03,
+   "take_hf2k": 0.018,
+   "src_hf4k": 0.004,
+   "take_hf4k": 0.006,
+   "ratio": null
+  },
+  {
+   "word": "we",
+   "t0": 3.96,
+   "t1": 6.6,
+   "src_hf2k": 0.051,
+   "take_hf2k": 0.025,
+   "src_hf4k": 0.005,
+   "take_hf4k": 0.008,
+   "ratio": 0.48
+  },
+  {
+   "word": "are",
+   "t0": 6.6,
+   "t1": 6.98,
+   "src_hf2k": 0.003,
+   "take_hf2k": 0.005,
+   "src_hf4k": 0.002,
+   "take_hf4k": 0.002,
+   "ratio": null
+  },
+  {
+   "word": "the",
+   "t0": 6.98,
+   "t1": 7.38,
+   "src_hf2k": 0.006,
+   "take_hf2k": 0.008,
+   "src_hf4k": 0.004,
+   "take_hf4k": 0.006,
+   "ratio": null
+  },
+  {
+   "word": "beautiful",
+   "t0": 7.38,
+   "t1": 8.18,
+   "src_hf2k": 0.011,
+   "take_hf2k": 0.004,
+   "src_hf4k": 0.002,
+   "take_hf4k": 0.001,
+   "ratio": null
+  },
+  {
+   "word": "no",
+   "t0": 9.39,
+   "t1": 9.53,
+   "src_hf2k": 0.002,
+   "take_hf2k": 0.004,
+   "src_hf4k": 0.001,
+   "take_hf4k": 0.003,
+   "ratio": null
+  }
+ ],
+ "bursts": [],
+ "harsh": [],
+ "clicks": [
+  {
+   "t": 4.92,
+   "db": 15.9
+  }
+ ],
+ "metal_ratio": 1.19,
+ "asr_source": "I wish you were here tonight We are the beautiful know",
+ "asr_take": "For when you are here tonight We are the beauty of love",
+ "ref_words": [
+  {
+   "w": "i",
+   "t0": 0.0,
+   "t1": 0.44,
+   "ca": 0,
+   "cb": 1
+  },
+  {
+   "w": "wish",
+   "t0": 0.44,
+   "t1": 0.96,
+   "ca": 2,
+   "cb": 6
+  },
+  {
+   "w": "you",
+   "t0": 0.96,
+   "t1": 1.64,
+   "ca": 7,
+   "cb": 10
+  },
+  {
+   "w": "were",
+   "t0": 1.64,
+   "t1": 1.94,
+   "ca": 11,
+   "cb": 15
+  },
+  {
+   "w": "here",
+   "t0": 1.94,
+   "t1": 2.54,
+   "ca": 16,
+   "cb": 20
+  },
+  {
+   "w": "tonight",
+   "t0": 2.54,
+   "t1": 3.96,
+   "ca": 21,
+   "cb": 28
+  },
+  {
+   "w": "we",
+   "t0": 3.96,
+   "t1": 6.6,
+   "ca": 29,
+   "cb": 31
+  },
+  {
+   "w": "are",
+   "t0": 6.6,
+   "t1": 6.98,
+   "ca": 32,
+   "cb": 35
+  },
+  {
+   "w": "the",
+   "t0": 6.98,
+   "t1": 7.38,
+   "ca": 36,
+   "cb": 39
+  },
+  {
+   "w": "beautiful",
+   "t0": 7.38,
+   "t1": 8.18,
+   "ca": 40,
+   "cb": 49
+  },
+  {
+   "w": "no",
+   "t0": 9.389,
+   "t1": 9.529,
+   "ca": 50,
+   "cb": 52
+  }
+ ],
+ "lyrics_used": true
+}
