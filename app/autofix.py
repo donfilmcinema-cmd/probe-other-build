@@ -29,7 +29,9 @@ PAD = 0.05         # с: вклеивается слово ± это
 CLIP = 1.0         # с: отрезок распознавания вокруг слова
 MAX_WORDS = 200    # 0.8.9: было 40 — на Suno-песне ошибок ~150
 METHODS = {"consonants": "согласные исходника", "lowidx": "меньше тембра", "seedvc": "Seed-VC", "rvc": "RVC",
-           "executor": "Executor → RVC"}
+           "executor": "Executor → RVC", "executor_head": "Executor → RVC, по слогу",
+           "executor_crisp": "Executor → RVC, чётче согласные"}
+EXEC_FAMILY = ("executor", "executor_head", "executor_crisp")
 EXEC_XF = 0.02     # 0.9.4: стык места «Executor → RVC» — 20 мс (письмо sound 17.11)
 
 
@@ -115,8 +117,23 @@ def _consonant_region(take, src, sr, a, b, spans, out):
     A.write(out, z, sr, "FLOAT")
 
 
-VAR_NAME = {"executor": "Executor-RVC", "consonants": "согласные исходника", "lowidx": "меньше тембра",
+VAR_NAME = {"executor": "Executor-RVC", "executor_head": "Executor-RVC по слогу",
+            "executor_crisp": "Executor-RVC чётче согласные", "consonants": "согласные исходника", "lowidx": "меньше тембра",
             "seedvc": "Seed-VC", "rvc": "RVC"}
+
+
+def _ex_reg(m, er, spans):
+    """Окно семейства «Executor → RVC» для вклейки: весь кусок, «по слогу» (только начало слова) или «чётче»."""
+    if m == "executor_head":
+        sp = [h for h in er.get("head_spans") or [] if any(h[0] < s[1] and h[1] > s[0] for s in spans)]
+        out = er["out"]
+    elif m == "executor_crisp":
+        sp, out = spans, er.get("out_crisp")
+    else:
+        sp, out = spans, er["out"]
+    if not sp or not out or not Path(out).exists():
+        return None
+    return {"a": er["a"], "b": er["b"], "out": out, "spans": sp, "xf": EXEC_XF, "match_bright": True}
 
 
 def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
@@ -184,9 +201,14 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
                     E.log(f"ПО ТЕКСТУ: Executor → RVC пропущен: {ex}")
                     ex_regs = []
             if ex_regs:
-                methods.insert(0, "executor")
+                fam = ["executor"]
+                if any(r.get("head_spans") for r in ex_regs):
+                    fam.append("executor_head")
+                if any(Path(r.get("out_crisp", "")).exists() for r in ex_regs):
+                    fam.append("executor_crisp")
+                methods[:0] = fam
         ctx.span(0.55, 0.65, "Варианты мест…")
-        outs = {m: [str(rd / f"r{k:02d}_{m}.wav") for k in range(len(regs))] for m in methods if m != "executor"}
+        outs = {m: [str(rd / f"r{k:02d}_{m}.wav") for k in range(len(regs))] for m in methods if m not in EXEC_FAMILY}
         for k, r in enumerate(regs):
             _consonant_region(y, x, sr, r["a"], r["b"], r["spans"], outs["consonants"][k])
         rvc_m = "lowidx" if "lowidx" in methods else ("rvc" if "rvc" in methods else None)
@@ -221,9 +243,8 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
         ctx.span(0.65, 0.75, "Вклейка вариантов…")
         cand = {"take": str(take)}
         for m in methods:
-            if m == "executor":
-                rj = [{"a": r["a"], "b": r["b"], "out": r["out"], "spans": r["spans"], "xf": EXEC_XF, "match_bright": True}
-                      for r in ex_regs]
+            if m in EXEC_FAMILY:
+                rj = [x for x in (_ex_reg(m, r, r["spans"]) for r in ex_regs) if x]
             else:
                 rj = [{"a": r["a"], "b": r["b"], "out": outs[m][k], "spans": r["spans"]} for k, r in enumerate(regs)
                       if Path(outs[m][k]).exists()]
@@ -274,10 +295,17 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
             win = min(opts, key=lambda n: (key(n), 0 if n == "take" else 1))
             if win != "take" and key(win) >= key("take"):
                 win = "take"
+            # 0.9.6 (автор на слух, T022 «blindly»): по всей песне слово не расслышано, а на отрывке Whisper «слышит»
+            # его и в дубле — он угадывает по смыслу и судить не может. Тогда берём Executor → RVC, если слово слышно и в нём.
+            contested = False
+            if win == "take" and opts["take"]["has_target"]:
+                ex = next((n for n in EXEC_FAMILY if n in opts and opts[n]["has_target"]), None)
+                if ex:
+                    win, contested = ex, True
             best[pi] = win
             words.append({"word": pr["word"], "t0": pr["t0"], "t1": pr["t1"], "kind": pr["kind"], "heard": pr.get("heard"),
                           "chosen": win, "method": METHODS.get(win, "без изменений"),
-                          "fixed": win != "take" and opts[win]["has_target"],
+                          "fixed": win != "take" and opts[win]["has_target"], "contested": contested,
                           "before": opts["take"]["text"], "after": opts[win]["text"],
                           "tried": {n: {"text": o["text"], "wer": o["wer"], "ok": o["has_target"]} for n, o in opts.items()}})
 
@@ -290,12 +318,12 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
                 if m == "take":
                     continue
                 pr = problems[pi]
-                if m == "executor":
+                if m in EXEC_FAMILY:
                     for er in ex_regs:
                         sp = [s for s in er["spans"] if s[0] < pr["t1"] + PAD and s[1] > pr["t0"] - PAD]
-                        if sp:
-                            final.append({"a": er["a"], "b": er["b"], "out": er["out"], "spans": sp, "xf": EXEC_XF,
-                                          "match_bright": True})
+                        x = _ex_reg(m, er, sp) if sp else None
+                        if x:
+                            final.append(x)
                     continue
                 final.append({"a": r["a"], "b": r["b"], "out": outs[m][k],
                               "spans": [[round(max(0.0, pr["t0"] - PAD), 3), round(min(total, pr["t1"] + PAD), 3)]]})

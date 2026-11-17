@@ -311,6 +311,12 @@ def run(log=print):
         import autofix as AF2
         check("0.9.4: «Исправить по тексту» умеет «Executor → RVC», стык 20 мс",
               "executor" in AF2.METHODS and abs(AF2.EXEC_XF - 0.02) < 1e-9)
+        import textfix as TF2
+        _ws = [{"text": "blindly", "t0": 15.2, "t1": 16.4,
+                "letters": [[15.2, 15.3], [15.3, 15.4], [15.4, 15.8], [15.8, 15.9], [15.9, 16.0], [16.0, 16.2], [16.2, 16.4]]}]
+        check("0.9.6: «по слогу» — начало слова до первой согласной после гласной (bli|ndly)",
+              TF2.head_span([15.2, 16.4], _ws) == [15.2, 15.8], str(TF2.head_span([15.2, 16.4], _ws)))
+        check("0.9.6: три варианта Executor → RVC", AF2.EXEC_FAMILY == ("executor", "executor_head", "executor_crisp"))
         import songs as SG2
         check("0.9.5: варианты «по тексту» можно взять новым дублем", hasattr(SG2, "autofix_take_variant")
               and AF2.VAR_NAME.get("executor") == "Executor-RVC")

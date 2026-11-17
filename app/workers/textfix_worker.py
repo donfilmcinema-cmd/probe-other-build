@@ -221,7 +221,8 @@ def step_prepare(job):
         known = [x for x in lt if x]
         words.append({"text": w, "line": li, "from": ca, "to": cb,
                       "t0": round(known[0][0], 3) if known else None, "t1": round(known[-1][1], 3) if known else None,
-                      "score": round(ws[wi], 4) if wi < len(ws) else None})
+                      "score": round(ws[wi], 4) if wi < len(ws) else None,
+                      "letters": [None if x is None else [round(x[0], 3), round(x[1], 3)] for x in lt]})
     # подсказка мест: слово без кадров или с уверенностью намного ниже медианы — «возможно, съедено»
     sc = sorted(w["score"] for w in words if w["score"] is not None)
     med = sc[len(sc) // 2] if sc else 0.0

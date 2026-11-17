@@ -139,9 +139,42 @@ def executor_regions(ctx, tmp, source, item, lyrics, marks, language="auto", hin
         base = {k: item[k] for k in APPLIO_KEYS if k in item}
         items = [dict(base, input=r["src"], content_input=r["content"], f0_spans=r["f0_spans"], output=r["out"],
                       label=f"место {k + 1}") for k, r in enumerate(regs)]
+        # 0.9.6: второй вариант — «чётче согласные»: меньше тембра из индекса (меньше смаза), сильнее защита согласных
+        for k, r in enumerate(regs):
+            r["out_crisp"] = str(Path(r["out"]).with_name(Path(r["out"]).stem + "_crisp.wav"))
+            items.append(dict(base, input=r["src"], content_input=r["content"], f0_spans=r["f0_spans"],
+                              output=r["out_crisp"], label=f"место {k + 1} (чётче)",
+                              index_rate=min(float(base.get("index_rate", 0.6)), 0.3),
+                              protect=min(float(base.get("protect", 0.33)), 0.05)))
         ctx.run([p.applio_py, workers / "applio_worker.py", _job(tmp, "conv", {"items": items})], cwd=p.applio,
                 what="Executor → RVC")
+        words = plan.get("words") or []
+        for r in regs:
+            r["head_spans"] = [h for h in (head_span(s, words) for s in r["spans"]) if h]
     return plan, [r for r in regs if Path(r["out"]).exists()], rc.get("quality") or []
+
+
+VOWELS = set("aeiouyаеёиоуыэюя")
+
+
+def head_span(span, words):
+    """0.9.6: «по слогу» — от начала слова до первой согласной после первой гласной («bli|ndly»): начало слова —
+    из Executor → RVC, остальное — из дубля. Нет времён букв или слишком коротко — None."""
+    w0, w1 = span
+    for w in words:
+        if w.get("t0") is None or w["t0"] < w0 - 0.08 or w["t1"] > w1 + 0.08:
+            continue
+        txt, lt = (w.get("text") or "").lower(), w.get("letters") or []
+        v = next((i for i, c in enumerate(txt) if c in VOWELS), None)
+        if v is None:
+            continue
+        c = next((i for i in range(v + 1, len(txt)) if txt[i].isalpha() and txt[i] not in VOWELS), None)
+        if c is None or c >= len(lt) or lt[c] is None:
+            continue
+        split = lt[c][0]
+        if split - w0 > 0.08 and w1 - split > 0.08:
+            return [w0, round(split, 3)]
+    return None
 
 
 def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", hint="auto"):

@@ -94,7 +94,8 @@ if _q0 and (_q0["checks"]["wer"]["source"] or 0) > 50:
 # мера — исправленные слова (вариант, где нужное слово распознано) и «вне мест бит в бит»
 # 0.9.4: способ «Executor → RVC» должен быть среди испробованных (выигрывает ли — справочно)
 ok = RES.get("bad_data") or (RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"]
-                             and RES["executor_tried"] > 0 and "Executor-RVC.wav" in RES["variants"])
+                             and RES["executor_tried"] > 0 and "Executor-RVC.wav" in RES["variants"]
+                             and "Executor-RVC чётче согласные.wav" in RES["variants"])
 RES["ok"] = ok
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (AF_OUT / "result.json").write_text(json.dumps({"result": RES, "words": r["words"]}, ensure_ascii=False, indent=1),

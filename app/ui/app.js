@@ -791,14 +791,14 @@ async function runAutofix(s, t) {
   const r = await safe(() => api('text_autofix', { id: s.id, take: t.id, seedvc: svc }));
   if (r) { S.jobSeen = 0; pollJob(true); }
 }
-const AF_LABEL = { take: 'дубль как был', executor: 'Executor → RVC', consonants: 'согласные исходника', lowidx: 'меньше тембра', seedvc: 'Seed-VC', rvc: 'RVC' };
+const AF_LABEL = { take: 'дубль как был', executor: 'Executor → RVC', executor_head: 'Executor → RVC, по слогу', executor_crisp: 'Executor → RVC, чётче согласные', consonants: 'согласные исходника', lowidx: 'меньше тембра', seedvc: 'Seed-VC', rvc: 'RVC' };
 function showAutofix(song, r) {
   const a = r.autofix || {};
   const ws = a.words || [];
   const tm = v => v == null ? '?' : v.toFixed(1) + ' с';
   // 0.9.5: у каждого слова — что услышало распознавание в каждом способе
   const tried = w => Object.entries(w.tried || {}).map(([n, o]) => `<div class="${n === w.chosen ? 'q-ok' : ''}">${esc(AF_LABEL[n] || n)}: «${esc(o.text)}»${o.ok ? ' — слово слышно' : ''}${o.wer == null ? '' : ' · WER ' + o.wer + ' %'}</div>`).join('');
-  const rows = ws.map(w => `<tr><td>${tm(w.t0)}</td><td><b>${esc(w.word)}</b></td><td class="${w.fixed ? 'q-ok' : 'q-bad'}">${w.fixed ? '✓ ' + esc(w.method) : (w.chosen === 'take' ? '✗ не вышло — оставлено как было' : '≈ ' + esc(w.method))}</td><td class="v7-note">${tried(w) || ('было: «' + esc(w.before) + '»')}</td></tr>`).join('');
+  const rows = ws.map(w => `<tr><td>${tm(w.t0)}</td><td><b>${esc(w.word)}</b></td><td class="${w.fixed ? 'q-ok' : 'q-bad'}">${w.fixed ? '✓ ' + esc(w.method) + (w.contested ? '<br><span class="v7-note">распознавание спорит само с собой — проверьте на слух</span>' : '') : (w.chosen === 'take' ? '✗ не вышло — оставлено как было' : '≈ ' + esc(w.method))}</td><td class="v7-note">${tried(w) || ('было: «' + esc(w.before) + '»')}</td></tr>`).join('');
   const vars = (a.variants || []);
   const from = r.autofix_from;
   const vhtml = vars.length ? `<p class="v7-note" style="margin-top:10px"><b>Послушать каждый способ</b> (все слова с ошибкой исправлены этим способом, остальная песня — как в дубле). Распознавание может ошибаться — решает слух:</p>
@@ -806,7 +806,7 @@ function showAutofix(song, r) {
   const head = a.note ? esc(a.note) : `Слов с ошибкой: ${ws.length} · исправлено: ${a.fixed || 0} · осталось: ${a.left || 0}${a.passes > 1 ? ' · проходов: ' + a.passes : ''}` + (a.file ? ' · новый дубль готов, прежний не тронут' : ' · по распознаванию ни один вариант не лучше — послушайте варианты ниже');
   modal({ title: 'Исправление по тексту песни', cancel: false, ok: 'Закрыть',
     html: `<div class="q-rep"><div class="q-head ${(a.left || 0) === 0 ? 'ok' : 'bad'}">${head}</div>${rows ? `<table class="q-t">${rows}</table>` : ''}${vhtml}
-    <p class="v7-note">Способы: «Executor → RVC» — Executor поёт слово заново, голос — та же модель RVC (пробуется первым); «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — только если включено в «Перепевка — подробно». Автовыбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста.</p></div>` });
+    <p class="v7-note">Способы: «Executor → RVC» — Executor поёт слово заново, голос — та же модель RVC (пробуется первым); «по слогу» — из Executor → RVC только начало слова до первой согласной после гласной («bli|ndly»), остальное — из дубля; «чётче согласные» — Executor → RVC с меньшим тембром из индекса и сильной защитой согласных; «согласные исходника» — глухие звуки слова из исходника; «меньше тембра» — RVC с низким индексом; «Seed-VC» — только если включено в «Перепевка — подробно». Автовыбор — по распознаванию: где нужное слово слышно и меньше ошибок против текста.</p></div>` });
   const box = $('m-text');
   box.querySelectorAll('[data-av]').forEach(x => x.onclick = () => { Player.stop(); Player.toggle('afv_' + x.dataset.av, media(vars[+x.dataset.av].file, 0), null); });
   box.querySelectorAll('[data-ak]').forEach(x => x.onclick = async () => {
