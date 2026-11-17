@@ -1,0 +1,16 @@
+name: MMS_FA model to release (tmp)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  m:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Модель
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -sSL -o mms_fa.pt https://dl.fbaipublicfiles.com/mms/torchaudio/ctc_alignment_mling_uroman/model.pt
+          ls -la mms_fa.pt
+          gh release create tmp-mms -R ${{ github.repository }} -t "tmp MMS_FA (CC-BY-NC 4.0, Meta)" -n "temporary" mms_fa.pt
