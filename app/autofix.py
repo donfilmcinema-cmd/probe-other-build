@@ -115,8 +115,12 @@ def _consonant_region(take, src, sr, a, b, spans, out):
     A.write(out, z, sr, "FLOAT")
 
 
+VAR_NAME = {"executor": "Executor-RVC", "consonants": "согласные исходника", "lowidx": "меньше тембра",
+            "seedvc": "Seed-VC", "rvc": "RVC"}
+
+
 def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
-        use_seedvc=False):
+        use_seedvc=False, variants_dir=None):
     """source — исходник дубля, take — дубль, item — настройки той перепевки RVC (model, index, …), voice — код голоса
     (для образца Seed-VC). Пишет out; возвращает отчёт по словам."""
     import quality as Q
@@ -231,6 +235,19 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
             if f.exists():
                 cand[m] = str(f)
 
+        # 0.9.5: каждый способ целиком (все места этим способом) — автору на слух, даже если Whisper его не выбрал
+        variants = []
+        if variants_dir is not None:
+            vd = Path(variants_dir)
+            if vd.exists():
+                shutil.rmtree(vd, ignore_errors=True)
+            vd.mkdir(parents=True, exist_ok=True)
+            for m in methods:
+                if m in cand:
+                    f = vd / f"{VAR_NAME.get(m, m)}.wav"
+                    shutil.copy2(cand[m], f)
+                    variants.append({"method": m, "label": METHODS.get(m, m), "file": str(f)})
+
         # ---- оценка распознаванием: слово ± 1 с, против слов текста в этом отрезке
         ctx.span(0.75, 0.93, "Оценка вариантов по тексту…")
         items, index = [], []
@@ -295,13 +312,13 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
               f"способы {[w['method'] for w in words if w['chosen'] != 'take']}, {time.time() - t_all:.0f} с")
         return {"before": report["checks"]["wer"], "words": words, "changed": changed,
                 "file": str(out) if final and out.exists() else None, "fixed": n_fixed, "left": len(problems) - n_fixed,
-                "methods": methods, "seconds": round(time.time() - t_all, 1)}
+                "methods": methods, "variants": variants, "seconds": round(time.time() - t_all, 1)}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
 def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, language="auto", engine_take="rvc",
-               passes=3, use_seedvc=False):
+               passes=3, use_seedvc=False, variants_dir=None):
     """0.8.9: «проходить, пока исправляется» — до 3 проходов. Каждый следующий заново сверяет уже исправленный
     дубль с текстом и берётся за оставшиеся слова; останов, когда за проход ничего не исправилось."""
     out = Path(out)
@@ -312,7 +329,7 @@ def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, la
             ctx.span(k / passes, (k + 1) / passes, f"Проход {k + 1} из {passes}…")
             dst = tmp / f"pass{k + 1}.wav"
             r = fix(ctx, source, cur, item, lyrics, dst, voice=voice, report=rep, language=language,
-                    engine_take=engine_take, use_seedvc=use_seedvc)
+                    engine_take=engine_take, use_seedvc=use_seedvc, variants_dir=variants_dir if k == 0 else None)
             if first is None:
                 first = r
             for w in r.get("words", []):
@@ -336,6 +353,7 @@ def fix_passes(ctx, source, take, item, lyrics, out, voice=None, report=None, la
         return {"before": first["before"] if first else None, "words": words, "changed": [list(c) for c in changed],
                 "file": str(out) if cur != Path(take) else None, "fixed": sum(1 for w in words if w.get("fixed")),
                 "left": sum(1 for w in words if not w.get("fixed")), "passes": k + 1,
-                "methods": (res or {}).get("methods"), "note": (first or {}).get("note")}
+                "methods": (first or {}).get("methods"), "variants": (first or {}).get("variants") or [],
+                "note": (first or {}).get("note")}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -590,7 +590,7 @@ def text_autofix(ctx, song_id, take_id, lyrics=None, use_seedvc=False):
         inp = tmp / "src.wav"
         A.to_wav(src, inp, mono=True)
         r = AF.fix_passes(ctx, inp, s.dir / t["file"], item, lyr, s.dir / fname, voice=t["voice"], report=rep,
-                          use_seedvc=bool(use_seedvc),
+                          use_seedvc=bool(use_seedvc), variants_dir=s.dir / "по тексту - варианты",
                    engine_take=eng)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -610,4 +610,30 @@ def text_autofix(ctx, song_id, take_id, lyrics=None, use_seedvc=False):
         v["made"] = []
     v["autofix"] = r
     v["autofix_from"] = t["id"]
+    s.m["autofix_last"] = {"from": t["id"], "variants": r.get("variants") or [], "words": r.get("words", []),
+                           "at": time.time()}
+    s.save()
+    return v
+
+
+def autofix_take_variant(song_id, take_id, method):
+    """0.9.5: взять вариант «Вся песня по тексту» одним способом (все места этим способом) новым дублем —
+    по решению автора на слух, даже если распознавание его не выбрало."""
+    s = get(song_id)
+    last = s.m.get("autofix_last") or {}
+    var = next((x for x in last.get("variants", []) if x["method"] == method), None)
+    if not var or not Path(var["file"]).exists():
+        raise E.EngineError("Вариант не найден — запустите «Вся песня по тексту» ещё раз.")
+    t, _src = _take(s, take_id)
+    takes = s.m.setdefault("takes", [])
+    num = 1 + max([x.get("num", 0) for x in takes] + [0])
+    fname = f"{Path(t['file']).stem} - по тексту {num:02d} ({var['label']}).wav".replace("→", "-")
+    shutil.copy2(var["file"], s.dir / fname)
+    nt = dict(t, id=f"t{int(time.time() * 1000)}atv", num=num, file=fname, made=time.time(), fixed_from=t["id"],
+              fixed_from_num=t.get("num"), autofix=True, autofix_variant=method, autofix_words=last.get("words", []))
+    nt.pop("quality", None)
+    takes.append(nt)
+    s.save()
+    v = s.view()
+    v["made"] = [nt["id"]]
     return v

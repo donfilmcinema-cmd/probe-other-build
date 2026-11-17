@@ -61,14 +61,16 @@ ctx = E.Ctx()
 src, take = OUT / "clean.wav", OUT / "quality" / "take_bad.wav"
 item = {"model": str(W / "test_voice.pth"), "index": "", "pitch": 0, "index_rate": 0.0, "protect": 0.33,
         "f0_method": "rmvpe"}
-r = AF.fix_passes(ctx, src, take, item, LYR, AF_OUT / "fixed.wav", voice=None, language="en")
+r = AF.fix_passes(ctx, src, take, item, LYR, AF_OUT / "fixed.wav", voice=None, language="en",
+                  variants_dir=AF_OUT / "варианты")
 print(json.dumps({k: v for k, v in r.items() if k != "words"}, ensure_ascii=False))
 for w in r["words"]:
     print(f"   {w['word']:>10} {w['t0']}–{w['t1']} {w['kind']}: {w['method']}{' ✓' if w['fixed'] else ''} | было «{w['before']}» → «{w['after']}»"
           f" | варианты {json.dumps(w['tried'], ensure_ascii=False)}")
 RES = {"problems": len(r["words"]), "fixed": r.get("fixed", 0), "file": bool(r.get("file")),
        "methods": r.get("methods"), "by_executor": sum(1 for w in r["words"] if w.get("chosen") == "executor"),
-       "executor_tried": sum(1 for w in r["words"] if "executor" in (w.get("tried") or {}))}
+       "executor_tried": sum(1 for w in r["words"] if "executor" in (w.get("tried") or {})),
+       "variants": [Path(v["file"]).name for v in r.get("variants") or [] if Path(v["file"]).exists()]}
 if r.get("file"):
     y0, sr = sf.read(take, dtype="float64", always_2d=True)
     y1, _ = sf.read(r["file"], dtype="float64", always_2d=True)
@@ -92,7 +94,7 @@ if _q0 and (_q0["checks"]["wer"]["source"] or 0) > 50:
 # мера — исправленные слова (вариант, где нужное слово распознано) и «вне мест бит в бит»
 # 0.9.4: способ «Executor → RVC» должен быть среди испробованных (выигрывает ли — справочно)
 ok = RES.get("bad_data") or (RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"]
-                             and RES["executor_tried"] > 0)
+                             and RES["executor_tried"] > 0 and "Executor-RVC.wav" in RES["variants"])
 RES["ok"] = ok
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (AF_OUT / "result.json").write_text(json.dumps({"result": RES, "words": r["words"]}, ensure_ascii=False, indent=1),

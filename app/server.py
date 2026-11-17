@@ -329,6 +329,8 @@ class App:
             return self.start_job("autofix", "Исправление по тексту песни",
                                   lambda ctx: S.text_autofix(ctx, b["id"], b["take"], b.get("lyrics"),
                                                              b.get("seedvc", False)))
+        if name == "autofix_take_variant":
+            return S.autofix_take_variant(b["id"], b["take"], b["method"])
         if name == "take_tune":
             # 0.9.2: подобрать настройки RVC по тексту песни
             return self.start_job("tune", "Подбор настроек по тексту",
