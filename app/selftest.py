@@ -308,6 +308,9 @@ def run(log=print):
         check("Seed-VC: код едет в программе (без GitHub)",
               (E.WORKERS_SRC / "seedvc_src" / "modules" / "commons.py").exists()
               and (E.WORKERS_SRC / "seedvc_src" / "configs" / "presets" / "config_dit_mel_seed_uvit_whisper_base_f0_44k.yml").exists())
+        import autofix as AF2
+        check("0.9.4: «Исправить по тексту» умеет «Executor → RVC», стык 20 мс",
+              "executor" in AF2.METHODS and abs(AF2.EXEC_XF - 0.02) < 1e-9)
         import tune as TU
         import songs as SG
         _w = [{"w": "a", "t0": t} for t in (1, 2, 3, 50, 51, 52, 53, 54, 55, 56, 80)]

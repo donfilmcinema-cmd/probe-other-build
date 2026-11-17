@@ -110,6 +110,40 @@ def analyze(ctx, source, lyrics, marks=None, language="auto"):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+def executor_regions(ctx, tmp, source, item, lyrics, marks, language="auto", hint="auto"):
+    """0.9.4: окна «Executor → RVC» для пометок: Executor (SoulX-Singer; русский — Piper) поёт слово с соседями
+    в его времени и высоте → это содержание для RVC той же перепевки (высота и громкость — исходника).
+    Возвращает (plan, regions [{a, b, spans, out, …}], quality); файлы — в tmp/reg."""
+    p = E.paths()
+    workers = E.ensure_workers()
+    tmp = Path(tmp)
+    plan = _prepare(ctx, tmp, Path(source), lyrics, marks, language)
+    if not [m for m in plan["plan"] if m.get("found")]:
+        return plan, [], []
+    if plan["language"] == "ru" or hint == "piper":
+        if not E.piper_ready():
+            E.install_piper(ctx)
+        pj = {"step": "piper", "plan": str(tmp / "plan.json"), "voice": str(p.exec_piper_voice),
+              "out_wav": str(tmp / "hint.wav"), "align_model_dir": str(p.exec / "align")}
+        ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "piper", pj)], env=E.exec_env(),
+                what="Подсказка звучания")
+    else:
+        _soulx_hint(ctx, tmp, p, workers)
+    cj = {"step": "content", "input": str(source), "hint_wav": str(tmp / "hint.wav"), "plan": str(tmp / "plan.json"),
+          "content_out": str(tmp / "content.wav"), "region_dir": str(tmp / "reg"), "regions_out": str(tmp / "regions.json"),
+          "quality_out": str(tmp / "quality.json")}
+    rc = ctx.run([p.exec_py, workers / "textfix_worker.py", _job(tmp, "content", cj)], env=E.exec_env(),
+                 what="Содержание") or {}
+    regs = json.loads((tmp / "regions.json").read_text(encoding="utf-8"))
+    if regs:
+        base = {k: item[k] for k in APPLIO_KEYS if k in item}
+        items = [dict(base, input=r["src"], content_input=r["content"], f0_spans=r["f0_spans"], output=r["out"],
+                      label=f"место {k + 1}") for k, r in enumerate(regs)]
+        ctx.run([p.applio_py, workers / "applio_worker.py", _job(tmp, "conv", {"items": items})], cwd=p.applio,
+                what="Executor → RVC")
+    return plan, [r for r in regs if Path(r["out"]).exists()], rc.get("quality") or []
+
+
 def revoice_text(ctx, source, take, item, lyrics, marks, out, language="auto", hint="auto"):
     """source — исходник (тот, что перепевали), take — готовый дубль, item — настройки той перепевки
     (model, index, pitch, index_rate, protect, …), marks — [{from, to, replace?}] по символам lyrics.

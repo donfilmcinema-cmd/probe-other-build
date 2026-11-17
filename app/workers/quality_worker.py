@@ -262,7 +262,7 @@ def run(job):
             known = [q for q in lt if q]
             for part in (norm_words(w.replace("-", "")) or [w.lower()]):
                 ref.append({"w": part, "line": li, "t0": known[0][0] if known else None,
-                            "t1": known[-1][1] if known else None})
+                            "t1": known[-1][1] if known else None, "ca": ca, "cb": cb})
     else:
         ref = [dict(w) for w in a_src["words"]]
     rw = [r["w"] for r in ref]
@@ -302,7 +302,7 @@ def run(job):
             problems.append({"word": r["w"], "t0": None if r["t0"] is None else round(r["t0"], 2),
                              "t1": None if r["t1"] is None else round(r["t1"], 2),
                              "kind": "съедено" if op == "del" else "искажено",
-                             "heard": None if j is None else hyp_t[j],
+                             "heard": None if j is None else hyp_t[j], "ca": r.get("ca"), "cb": r.get("cb"),
                              "also_in_source": i in src_bad})
 
     # яркость по словам
@@ -350,7 +350,8 @@ def run(job):
         "bursts": art["bursts"], "harsh": art["harsh"], "clicks": art["clicks"], "metal_ratio": art["metal_ratio"],
         "asr_source": a_src["text"], "asr_take": a_take["text"],
         "ref_words": [{"w": r["w"], "t0": None if r["t0"] is None else round(r["t0"], 3),
-                       "t1": None if r["t1"] is None else round(r["t1"], 3)} for r in ref],
+                       "t1": None if r["t1"] is None else round(r["t1"], 3), "ca": r.get("ca"), "cb": r.get("cb")}
+                      for r in ref],
         "lyrics_used": bool(lyrics),
     }
     json.dump(res, open(job["out_json"], "w", encoding="utf-8"), ensure_ascii=False, indent=1)

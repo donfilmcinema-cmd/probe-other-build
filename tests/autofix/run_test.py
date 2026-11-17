@@ -36,7 +36,10 @@ E.ensure_workers = lambda: WORK
 env = dict(os.environ, NLTK_DATA=str(W / "nltk_data"))
 E.exec_env = lambda: env
 _P = types.SimpleNamespace(exec_py=EXEC_PY, applio_py=APPLIO_PY, applio=W / "applio", exec=W / "exec",
-                           uv_cache=W / "uvc", python_dir=W / "uvp")
+                           uv_cache=W / "uvc", python_dir=W / "uvp", exec_src=W / "soulx",
+                           exec_model=W / "models/model.pt", exec_prompt_wav=W / "en_prompt.wav",
+                           exec_prompt_meta=W / "soulx/example/audio/en_prompt.json")
+(W / "exec").mkdir(exist_ok=True)
 E.paths = lambda: _P
 _n = [0]
 
@@ -63,7 +66,9 @@ print(json.dumps({k: v for k, v in r.items() if k != "words"}, ensure_ascii=Fals
 for w in r["words"]:
     print(f"   {w['word']:>10} {w['t0']}–{w['t1']} {w['kind']}: {w['method']}{' ✓' if w['fixed'] else ''} | было «{w['before']}» → «{w['after']}»"
           f" | варианты {json.dumps(w['tried'], ensure_ascii=False)}")
-RES = {"problems": len(r["words"]), "fixed": r.get("fixed", 0), "file": bool(r.get("file"))}
+RES = {"problems": len(r["words"]), "fixed": r.get("fixed", 0), "file": bool(r.get("file")),
+       "methods": r.get("methods"), "by_executor": sum(1 for w in r["words"] if w.get("chosen") == "executor"),
+       "executor_tried": sum(1 for w in r["words"] if "executor" in (w.get("tried") or {}))}
 if r.get("file"):
     y0, sr = sf.read(take, dtype="float64", always_2d=True)
     y1, _ = sf.read(r["file"], dtype="float64", always_2d=True)
@@ -85,7 +90,9 @@ if _q0 and (_q0["checks"]["wer"]["source"] or 0) > 50:
     RES["bad_data"] = True
 # WER всего дубля справочно: у испорченного дубля (дрожание громкости) распознавание «сочиняет» слова вне мест —
 # мера — исправленные слова (вариант, где нужное слово распознано) и «вне мест бит в бит»
-ok = RES.get("bad_data") or RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"]
+# 0.9.4: способ «Executor → RVC» должен быть среди испробованных (выигрывает ли — справочно)
+ok = RES.get("bad_data") or (RES["problems"] > 0 and RES["fixed"] >= 1 and RES["outside_identical"]
+                             and RES["executor_tried"] > 0)
 RES["ok"] = ok
 print(json.dumps(RES, ensure_ascii=False, indent=1))
 (AF_OUT / "result.json").write_text(json.dumps({"result": RES, "words": r["words"]}, ensure_ascii=False, indent=1),

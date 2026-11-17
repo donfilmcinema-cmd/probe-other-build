@@ -388,6 +388,27 @@ def step_content(job):
 
 
 # ------------------------------------------------------------------ splice
+def _match_bright(seg, y, a, b, sr, ctx_s=0.2, f=2000.0):
+    """0.9.4: яркость вклейки — как у дубля в соседних 200 мс: полка выше 2 кГц (±6 дБ)."""
+    import numpy as np
+    from scipy.signal import butter, sosfiltfilt
+    ma, mb = max(0, a - int(ctx_s * sr)), min(len(y), b + int(ctx_s * sr))
+    nb = np.concatenate([y[ma:a].mean(1), y[b:mb].mean(1)])
+    if len(nb) < int(0.05 * sr) or len(seg) < 64:
+        return seg
+    sos = butter(4, f / (sr / 2), btype="high", output="sos")
+    try:
+        hs, hn = sosfiltfilt(sos, seg), sosfiltfilt(sos, nb)
+    except ValueError:
+        return seg
+    rs = np.sqrt(np.mean(hs ** 2) / (np.mean(seg ** 2) + 1e-12))
+    rn = np.sqrt(np.mean(hn ** 2) / (np.mean(nb ** 2) + 1e-12))
+    if rs < 1e-4 or rn < 1e-4:
+        return seg
+    g = float(np.clip(rn / rs, 0.5, 2.0))
+    return seg + (g - 1.0) * hs
+
+
 def step_splice(job):
     import numpy as np
     import soundfile as sf
@@ -399,6 +420,7 @@ def step_splice(job):
     xf = int(XF * sr)
     changed = []
     checks = []
+    seen = set()
     for r in regs:
         z, zsr = sf.read(r["out"], dtype="float64", always_2d=True)
         z = z.mean(1)
@@ -406,12 +428,18 @@ def step_splice(job):
             g = gcd(int(sr), int(zsr))
             z = resample_poly(z, int(sr) // g, int(zsr) // g)
         ia = int(round(r["a"] * sr))
+        xf = int(float(r.get("xf") or XF) * sr)                # 0.9.4: у «Executor → RVC» стык 20 мс
         for s0, s1 in r["spans"]:
             a, b = int(s0 * sr) - xf, int(s1 * sr) + xf
             a, b = max(ia, a), min(ia + len(z), b, len(y))
             if b - a < 2 * xf + 8:
                 continue
+            if (a, b) in seen:
+                continue
+            seen.add((a, b))
             seg = z[a - ia:b - ia]
+            if r.get("match_bright"):
+                seg = _match_bright(seg, y, a, b, sr)
             # уровень окна — как у дубля по краям (дубль мог пройти обработку после перепевки)
             ma, mb = max(ia, a - int(0.25 * sr)), min(ia + len(z), b + int(0.25 * sr), len(y))
             edge_y = np.concatenate([y[ma:a].mean(1), y[b:mb].mean(1)])

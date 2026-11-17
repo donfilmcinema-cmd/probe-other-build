@@ -300,6 +300,16 @@ def align(x16, words, lang, job):
         if bad:
             letters[wi] = [None] * len(lt)
     job["_wscore"] = wscore
+    # 0.9.4: уверенность каждой буквы (средняя вероятность её кадров) — для проверки «пропал звук»
+    ls = []
+    for wi, (w, _li) in enumerate(words):
+        sc = [None] * len(w)
+        for k, (ow, ci) in enumerate(owner):
+            if ow == wi:
+                li = srcmap[wi][ci]
+                sc[li] = tscore[k] if sc[li] is None else max(sc[li], tscore[k])
+        ls.append(sc)
+    job["_lscore"] = ls
     return letters
 
 

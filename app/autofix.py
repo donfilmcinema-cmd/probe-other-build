@@ -28,7 +28,9 @@ CTX = 0.6          # с: контекст перепевки вокруг сло
 PAD = 0.05         # с: вклеивается слово ± это
 CLIP = 1.0         # с: отрезок распознавания вокруг слова
 MAX_WORDS = 200    # 0.8.9: было 40 — на Suno-песне ошибок ~150
-METHODS = {"consonants": "согласные исходника", "lowidx": "меньше тембра", "seedvc": "Seed-VC", "rvc": "RVC"}
+METHODS = {"consonants": "согласные исходника", "lowidx": "меньше тембра", "seedvc": "Seed-VC", "rvc": "RVC",
+           "executor": "Executor → RVC"}
+EXEC_XF = 0.02     # 0.9.4: стык места «Executor → RVC» — 20 мс (письмо sound 17.11)
 
 
 def _job(tmp, name, d):
@@ -124,7 +126,8 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
     workers = E.ensure_workers()
     source, take, out = Path(source), Path(take), Path(out)
     t_all = time.time()
-    if report is None or not report.get("lyrics_used") or "ref_words" not in report:
+    old = report is not None and any("ca" not in pr for pr in report.get("problems", []))    # отчёт до 0.9.4
+    if report is None or old or not report.get("lyrics_used") or "ref_words" not in report:
         ctx.span(0.0, 0.35, "Сверка дубля с текстом…")
         report = Q.measure(ctx, source, take, lyrics, language, out=E.new_tmp("afq") / "q.json")
     problems = [pr for pr in report.get("problems", []) if pr.get("t0") is not None and pr.get("t1") is not None]
@@ -161,8 +164,25 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
         svc_ok = use_seedvc and engine_take != "seedvc" and E.seedvc_ready() and voice is not None
         if svc_ok:
             methods.append("seedvc")
-        ctx.span(0.35, 0.65, "Варианты мест…")
-        outs = {m: [str(rd / f"r{k:02d}_{m}.wav") for k in range(len(regs))] for m in methods}
+        # 0.9.4: «Executor → RVC» — слово с соседями поёт Executor, тембр даёт та же модель RVC; первым способом
+        ex_ok = engine_take != "seedvc" and item.get("model") and E.executor_status()["ready"]
+        ex_regs = []
+        if ex_ok:
+            import textfix as TF
+            marks = [{"from": pr["ca"], "to": pr["cb"]} for pr in problems
+                     if pr.get("ca") is not None and pr.get("cb") is not None]
+            if marks:
+                ctx.span(0.35, 0.55, "Executor поёт слова, RVC — тембр…")
+                try:
+                    (tmp / "ex").mkdir(exist_ok=True)
+                    _plan, ex_regs, _q = TF.executor_regions(ctx, tmp / "ex", source, item, lyrics, marks, lang)
+                except E.EngineError as ex:
+                    E.log(f"ПО ТЕКСТУ: Executor → RVC пропущен: {ex}")
+                    ex_regs = []
+            if ex_regs:
+                methods.insert(0, "executor")
+        ctx.span(0.55, 0.65, "Варианты мест…")
+        outs = {m: [str(rd / f"r{k:02d}_{m}.wav") for k in range(len(regs))] for m in methods if m != "executor"}
         for k, r in enumerate(regs):
             _consonant_region(y, x, sr, r["a"], r["b"], r["spans"], outs["consonants"][k])
         rvc_m = "lowidx" if "lowidx" in methods else ("rvc" if "rvc" in methods else None)
@@ -197,8 +217,12 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
         ctx.span(0.65, 0.75, "Вклейка вариантов…")
         cand = {"take": str(take)}
         for m in methods:
-            rj = [{"a": r["a"], "b": r["b"], "out": outs[m][k], "spans": r["spans"]} for k, r in enumerate(regs)
-                  if Path(outs[m][k]).exists()]
+            if m == "executor":
+                rj = [{"a": r["a"], "b": r["b"], "out": r["out"], "spans": r["spans"], "xf": EXEC_XF, "match_bright": True}
+                      for r in ex_regs]
+            else:
+                rj = [{"a": r["a"], "b": r["b"], "out": outs[m][k], "spans": r["spans"]} for k, r in enumerate(regs)
+                      if Path(outs[m][k]).exists()]
             (tmp / f"regs_{m}.json").write_text(json.dumps(rj), encoding="utf-8")
             f = tmp / f"cand_{m}.wav"
             ctx.run([p.exec_py, workers / "textfix_worker.py",
@@ -249,6 +273,13 @@ def fix(ctx, source, take, item, lyrics, out, voice=None, report=None, language=
                 if m == "take":
                     continue
                 pr = problems[pi]
+                if m == "executor":
+                    for er in ex_regs:
+                        sp = [s for s in er["spans"] if s[0] < pr["t1"] + PAD and s[1] > pr["t0"] - PAD]
+                        if sp:
+                            final.append({"a": er["a"], "b": er["b"], "out": er["out"], "spans": sp, "xf": EXEC_XF,
+                                          "match_bright": True})
+                    continue
                 final.append({"a": r["a"], "b": r["b"], "out": outs[m][k],
                               "spans": [[round(max(0.0, pr["t0"] - PAD), 3), round(min(total, pr["t1"] + PAD), 3)]]})
         changed = []
